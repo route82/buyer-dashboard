@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>바이어 관리 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --blue:#0B65D8; --blue-dark:#0950ac; --blue-soft:#eaf2fd;
+  --bg:#f6f8fa; --card:#ffffff;
+  --ink:#111827; --ink2:#4b5563; --ink3:#8a94a6;
+  --line:#e5e7eb; --line2:#d5dae2;
+  --st-huho:#6b7280; --st-gumto:#0B65D8; --st-mail:#0e7490;
+  --st-reply:#b45309; --st-nego:#c2410c; --st-win:#15803d; --st-hold:#b91c1c;
+  --t1:#15803d; --t2:#b45309; --t3:#b91c1c; --t0:#8a94a6;
+  --radius:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  font-size:14px; line-height:1.55;
+  word-break:keep-all; overflow-wrap:break-word;
+}
+h1,h2,h3{margin:0; letter-spacing:-0.02em; word-break:keep-all}
+a{color:var(--blue)}
+button,input,select,textarea{font:inherit; color:var(--ink)}
+button{cursor:pointer}
+.hidden{display:none !important}
+.muted{color:var(--ink3)}
+
+.fld{width:100%; background:#fff; border:1px solid var(--line2);
+     border-radius:9px; padding:9px 11px}
+.fld:focus{outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-soft)}
+textarea.fld{min-height:70px; resize:vertical}
+.btn{border:1px solid var(--line2); background:#fff; color:var(--ink2);
+     border-radius:9px; padding:8px 13px; font-weight:600; white-space:nowrap}
+.btn:hover{background:#f3f5f8}
+.btn-primary{background:var(--blue); border-color:var(--blue); color:#fff}
+.btn-primary:hover{background:var(--blue-dark)}
+.btn-danger{color:var(--st-hold); border-color:#f0c9c9}
+.btn-danger:hover{background:#fdf1f1}
+.btn-block{width:100%; padding:11px; display:block}
+
+/* ── 로그인 ── */
+#login{max-width:380px; margin:9vh auto; background:var(--card);
+       border:1px solid var(--line); border-radius:16px; padding:32px 28px;
+       box-shadow:0 1px 3px rgba(16,24,40,.06)}
+#login h1{font-size:21px}
+#login .lead{color:var(--ink2); margin:6px 0 22px}
+#login label{display:block; font-size:12px; font-weight:600; color:var(--ink2); margin:14px 0 6px}
+.msg{font-size:13px; margin-top:12px; min-height:18px}
+.msg.bad{color:var(--st-hold)} .msg.ok{color:var(--st-win)} .msg.info{color:var(--ink2)}
+
+/* ── 레이아웃 ── */
+.wrap{max-width:1400px; margin:0 auto; padding:20px 16px 72px}
+.appbar{background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:30}
+.appbar .inner{max-width:1400px; margin:0 auto; padding:12px 16px;
+               display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.brand{font-size:17px; font-weight:700}
+.brand .dotmark{display:inline-block; width:9px; height:9px; border-radius:3px;
+                background:var(--blue); margin-right:8px; vertical-align:middle}
+.spacer{flex:1}
+.whoami{font-size:12px; color:var(--ink3); max-width:190px; overflow:hidden;
+        text-overflow:ellipsis; white-space:nowrap}
+
+/* ── 요약 타일 ── */
+.tiles{display:grid; gap:10px; margin:18px 0 16px;
+       grid-template-columns:repeat(auto-fit,minmax(128px,1fr))}
+.tile{background:var(--card); border:1px solid var(--line);
+      border-radius:var(--radius); padding:14px 15px}
+.tile.hero{background:var(--blue); border-color:var(--blue)}
+.tile.hero .t-k,.tile.hero .t-v{color:#fff}
+.tile.accent{background:var(--blue-soft); border-color:#cfe2fa}
+.t-k{font-size:12px; color:var(--ink2); font-weight:600; display:flex;
+     align-items:center; gap:6px}
+.t-v{font-size:27px; font-weight:700; margin-top:3px; letter-spacing:-0.03em}
+.t-dot{width:8px; height:8px; border-radius:50%; flex:none}
+
+/* ── 필터 ── */
+.toolbar{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+         padding:12px; margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap}
+.toolbar .grow{flex:1 1 200px; min-width:0}
+.toolbar select{flex:0 1 132px; min-width:0}
+
+/* ── 표 ── */
+.panel{background:var(--card); border:1px solid var(--line);
+       border-radius:var(--radius); overflow:hidden}
+.tblscroll{overflow-x:auto}
+table{width:100%; border-collapse:collapse}
+th{font-size:11.5px; font-weight:700; color:var(--ink3); text-align:left;
+   padding:11px 12px; border-bottom:1px solid var(--line); white-space:nowrap;
+   background:#fbfcfd; letter-spacing:.02em}
+td{padding:11px 12px; border-bottom:1px solid #f0f2f5; vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr[data-row]{cursor:pointer}
+tbody tr:hover{background:#fbfcfe}
+tbody tr.detail{cursor:default}
+.c-name{font-weight:650; min-width:160px}
+.c-sub{font-size:12px; color:var(--ink3); margin-top:2px}
+.small{font-size:13px; color:var(--ink2)}
+.nowrap{white-space:nowrap}
+.stsel{border:1px solid var(--line2); border-radius:8px; padding:5px 8px;
+        font-size:12.5px; font-weight:650; background:#fff; max-width:124px}
+.tiertxt{font-weight:700; font-size:13px; white-space:nowrap; color:var(--ink)}
+.tiertxt.none{color:var(--ink3); font-weight:500}
+
+/* 빠른 필터 칩 */
+.quick{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px}
+.chip{border:1px solid var(--line2); background:#fff; color:var(--ink2);
+      border-radius:999px; padding:6px 13px; font-size:13px; font-weight:600}
+.chip:hover{background:#f3f5f8}
+.chip.on{background:var(--blue); border-color:var(--blue); color:#fff}
+.rowbtns{display:flex; gap:6px}
+.linkbtn{border:none; background:none; color:var(--blue); font-weight:600;
+         padding:2px 4px; font-size:13px}
+.empty{padding:44px 20px; text-align:center; color:var(--ink3)}
+.foot{margin-top:12px; font-size:12px; color:var(--ink3)}
+.detail td{background:#fafbfd; font-size:13px; color:var(--ink2)}
+.detail dl{margin:0; display:grid; gap:9px}
+.detail dt{font-size:11.5px; font-weight:700; color:var(--ink3)}
+.detail dd{margin:2px 0 0}
+
+/* ── 모달 ── */
+.backdrop{position:fixed; inset:0; background:rgba(17,24,39,.45); z-index:50;
+          display:flex; align-items:flex-start; justify-content:center;
+          padding:24px 14px; overflow-y:auto}
+.modal{background:#fff; border-radius:16px; width:100%; max-width:720px;
+       box-shadow:0 12px 40px rgba(16,24,40,.2)}
+.modal header{padding:18px 20px; border-bottom:1px solid var(--line);
+              display:flex; align-items:center; gap:12px; position:sticky; top:0;
+              background:#fff; border-radius:16px 16px 0 0}
+.modal header h2{font-size:16px; flex:1}
+.modal .body{padding:18px 20px}
+.modal footer{padding:14px 20px 18px; display:flex; gap:8px; align-items:center;
+              border-top:1px solid var(--line)}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px}
+.f label{display:block; font-size:12px; font-weight:650; color:var(--ink2); margin-bottom:5px}
+.f.span2{grid-column:1 / -1}
+.req{color:var(--st-hold)}
+.hint{font-size:11.5px; color:var(--ink3); margin-top:4px}
+
+/* ── 모바일 ── */
+@media (max-width:900px){
+  .tiles{grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:8px}
+  .t-v{font-size:22px}
+  .toolbar select,.toolbar .grow{flex:1 1 100%}
+  thead{display:none}
+  table,tbody,tr,td{display:block; width:100%}
+  tbody tr{border-bottom:8px solid var(--bg); padding:4px 0}
+  tbody tr:hover{background:transparent}
+  tr.detail{border-bottom:8px solid var(--bg)}
+  td{border-bottom:1px solid #f2f4f7; padding:9px 14px;
+     display:flex; gap:12px; align-items:flex-start; min-width:0}
+  td.cell-mail{overflow-wrap:anywhere}
+  td::before{content:attr(data-l); flex:0 0 82px; font-size:11.5px; font-weight:700;
+             color:var(--ink3); padding-top:2px}
+  td.cell-name{display:block; padding-top:14px}
+  td.cell-name::before{display:none}
+  .c-name{font-size:15px}
+  .stsel{max-width:none; flex:1}
+  .grid2{grid-template-columns:1fr}
+  .modal{max-width:none}
+  .whoami{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     설정 — Supabase → Project Settings → API
+       · Project URL  (https://xxxx.supabase.co — 뒤에 경로 붙이지 말 것)
+       · anon public key (공개돼도 되는 값. service_role 키는 절대 금지)
+     ============================================================ -->
+<script>
+  const SUPABASE_URL = "https://vpddlyntnnpoxychtpsr.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwZGRseW50bm5wb3h5Y2h0cHNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzE4MzcsImV4cCI6MjEwMTQ0NzgzN30.y_M6UNuWmb3WgtplgsL9sYFfdu0Me_iW3n3a9ncbVB8";
+</script>
+
+<div id="login">
+  <h1><span class="dotmark"></span>바이어 관리 대시보드</h1>
+  <div class="lead">등록된 계정으로 로그인하세요.</div>
+  <form id="loginForm">
+    <label for="em">이메일</label>
+    <input class="fld" id="em" type="email" autocomplete="username" required>
+    <label for="pw">비밀번호</label>
+    <input class="fld" id="pw" type="password" autocomplete="current-password" required>
+    <button class="btn btn-primary btn-block" style="margin-top:20px" type="submit">로그인</button>
+    <div class="msg bad" id="loginMsg"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <div class="appbar"><div class="inner">
+    <div class="brand"><span class="dotmark"></span>바이어 관리</div>
+    <div class="spacer"></div>
+    <span class="whoami" id="whoami"></span>
+    <button class="btn" id="btnPw">비밀번호</button>
+    <button class="btn" id="btnOut">로그아웃</button>
+    <button class="btn btn-primary" id="btnNew">+ 바이어 추가</button>
+  </div></div>
+
+  <div class="wrap">
+    <div class="tiles" id="tiles"></div>
+
+    <div class="quick">
+      <button class="chip" data-qf="tier1">Tier 1만</button>
+      <button class="chip" data-qf="mail">이메일 있는 곳</button>
+      <button class="chip" data-qf="todo">아직 안 보낸 곳</button>
+      <button class="chip" data-qf="week">이번 주 회신</button>
+    </div>
+
+    <div class="toolbar">
+      <input class="fld grow" type="search" id="q"
+             placeholder="회사명·담당자·이메일·취급상품 검색">
+      <select class="fld" id="fTier"><option value="">티어 전체</option></select>
+      <select class="fld" id="fCountry"><option value="">국가 전체</option></select>
+      <select class="fld" id="fStatus"><option value="">상태 전체</option></select>
+      <select class="fld" id="fOwner"><option value="">담당자 전체</option></select>
+      <select class="fld" id="fSort">
+        <option value="tier">티어순</option>
+        <option value="recent">최근 연락순</option>
+        <option value="name">회사명순</option>
+      </select>
+      <button class="btn" id="btnReset">초기화</button>
+      <button class="btn" id="btnCsv" title="지금 화면에 보이는 목록을 엑셀 파일로 내려받습니다">
+        ⤓ 엑셀 내보내기</button>
+    </div>
+
+    <div class="panel">
+      <div class="tblscroll">
+        <table>
+          <thead><tr>
+            <th>티어</th><th>회사명</th><th>국가</th><th>담당자</th>
+            <th>이메일</th><th>상태</th><th>최근 연락</th><th style="width:118px"></th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="empty hidden" id="empty">조건에 맞는 바이어가 없습니다.</div>
+    </div>
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<!-- 추가/수정 -->
+<div class="backdrop hidden" id="formBack">
+  <div class="modal" role="dialog" aria-modal="true">
+    <header><h2 id="formTitle">바이어 추가</h2>
+      <button class="btn" id="formX" aria-label="닫기">닫기</button></header>
+    <form id="buyerForm">
+      <div class="body">
+        <div class="grid2">
+          <div class="f span2">
+            <label for="i_company">회사명 <span class="req">*</span></label>
+            <input class="fld" id="i_company" required>
+          </div>
+          <div class="f"><label for="i_tier">티어 (우선순위)</label>
+               <select class="fld" id="i_tier"></select>
+               <div class="hint">비워두면 '미분류'로 표시됩니다.</div></div>
+          <div class="f"><label for="i_status">상태</label>
+               <select class="fld" id="i_status"></select></div>
+          <div class="f"><label for="i_country">국가</label><input class="fld" id="i_country"></div>
+          <div class="f"><label for="i_type">업체유형</label>
+               <input class="fld" id="i_type" placeholder="예: 도매유통, 리테일 체인"></div>
+          <div class="f"><label for="i_contact">담당자</label><input class="fld" id="i_contact"></div>
+          <div class="f"><label for="i_email">이메일</label>
+               <input class="fld" id="i_email" type="email">
+               <div class="hint">이미 등록된 이메일은 중복 저장되지 않습니다.</div></div>
+          <div class="f span2"><label for="i_website">웹사이트</label>
+               <input class="fld" id="i_website" placeholder="https://"></div>
+          <div class="f"><label for="i_owner">담당 직원</label><input class="fld" id="i_owner"></div>
+          <div class="f"><label for="i_last">마지막 연락일</label>
+               <input class="fld" id="i_last" type="date"></div>
+          <div class="f span2"><label for="i_interest">관심사 / 취급 상품</label>
+               <textarea class="fld" id="i_interest"></textarea></div>
+          <div class="f span2"><label for="i_evidence">정보 출처 · 근거</label>
+               <textarea class="fld" id="i_evidence"></textarea></div>
+          <div class="f span2"><label for="i_notes">메모</label>
+               <textarea class="fld" id="i_notes"></textarea></div>
+        </div>
+        <div class="msg bad" id="formMsg"></div>
+      </div>
+      <footer>
+        <button class="btn btn-danger hidden" type="button" id="btnDel">삭제</button>
+        <div class="spacer"></div>
+        <button class="btn" type="button" id="btnCancel">취소</button>
+        <button class="btn btn-primary" type="submit" id="btnSave">저장</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<!-- 비밀번호 -->
+<div class="backdrop hidden" id="pwBack">
+  <div class="modal" style="max-width:420px" role="dialog" aria-modal="true">
+    <header><h2>비밀번호 변경</h2><button class="btn" id="pwX">닫기</button></header>
+    <form id="pwForm">
+      <div class="body">
+        <div class="f" style="margin-bottom:12px">
+          <label for="pw1">새 비밀번호</label>
+          <input class="fld" id="pw1" type="password" minlength="8" autocomplete="new-password" required>
+          <div class="hint">8자 이상. 영문과 숫자를 섞어주세요.</div>
+        </div>
+        <div class="f"><label for="pw2">새 비밀번호 확인</label>
+          <input class="fld" id="pw2" type="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="msg" id="pwMsg"></div>
+      </div>
+      <footer><div class="spacer"></div>
+        <button class="btn" type="button" id="pwCancel">취소</button>
+        <button class="btn btn-primary" type="submit">변경하기</button></footer>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1. 기본값
+   ============================================================ */
+const STATUSES = ['후보','검토완료','메일발송','회신옴','협상중','성사','보류'];
+const SC = {'후보':'var(--st-huho)','검토완료':'var(--st-gumto)','메일발송':'var(--st-mail)',
+            '회신옴':'var(--st-reply)','협상중':'var(--st-nego)','성사':'var(--st-win)',
+            '보류':'var(--st-hold)'};
+const SB = {'후보':'#f3f4f6','검토완료':'#eaf2fd','메일발송':'#e4f2f6',
+            '회신옴':'#fdf3e3','협상중':'#fdeee6','성사':'#e8f6ec','보류':'#fdecec'};
+
+const TIERS  = ['Tier 1','Tier 2','Tier 3','제외'];
+const NOTIER = '미분류';
+const TC = {'Tier 1':'var(--t1)','Tier 2':'var(--t2)','Tier 3':'var(--t3)','제외':'#6b7280',[NOTIER]:'var(--t0)'};
+const TB = {'Tier 1':'#e8f6ec','Tier 2':'#fdf3e3','Tier 3':'#fdecec','제외':'#eceef1',[NOTIER]:'#f3f4f6'};
+const TRANK = {'Tier 1':1,'Tier 2':2,'Tier 3':3,[NOTIER]:8,'제외':9};
+const tierOf = r => r.tier || NOTIER;
+
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today = () => { const d=new Date(), p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
+const mondayOfWeek = () => { const d=new Date(); d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()+6)%7)); const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
+
+let sb=null, rows=[], editingId=null, delArmed=false, hasTier=true;
+const QF={tier1:false, mail:false, todo:false, week:false};
+
+/* ============================================================
+   2. 로그인
+   ============================================================ */
+function boot(){
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)){
+    $('loginMsg').textContent='SUPABASE_URL 형식이 올바르지 않습니다. https://xxxx.supabase.co 형태여야 합니다.';
+    return false;
+  }
+  if(!SUPABASE_KEY || SUPABASE_KEY.length<40){
+    $('loginMsg').textContent='SUPABASE_KEY 가 비어 있거나 잘못되었습니다.'; return false;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  return true;
+}
+$('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault(); $('loginMsg').textContent='로그인 중...';
+  const {error} = await sb.auth.signInWithPassword({
+    email:$('em').value.trim(), password:$('pw').value});
+  if(error) $('loginMsg').textContent = error.message.includes('Invalid login')
+    ? '이메일 또는 비밀번호가 맞지 않습니다.' : '로그인 실패: '+error.message;
+});
+$('btnOut').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
+
+/* ============================================================
+   3. 데이터
+   ============================================================ */
+async function enterApp(user){
+  $('whoami').textContent = user.email;
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  await load();
+}
+async function load(){
+  const {data,error} = await sb.from('buyers').select('*').order('company',{ascending:true});
+  if(error){ $('empty').textContent='불러오기 실패: '+error.message;
+             $('empty').classList.remove('hidden'); return; }
+  rows = data || [];
+  hasTier = rows.length === 0 || Object.prototype.hasOwnProperty.call(rows[0], 'tier');
+  if(!hasTier){
+    $('foot').innerHTML = '<b style="color:var(--st-hold)">tier 컬럼이 아직 없습니다.'
+      + ' tier_migration.sql 을 Supabase에서 먼저 실행하세요.</b>';
+  }
+  fillFilter('fTier',   [...TIERS, NOTIER]);
+  fillFilter('fCountry',[...new Set(rows.map(r=>r.country).filter(Boolean))].sort());
+  fillFilter('fOwner',  [...new Set(rows.map(r=>r.owner).filter(Boolean))].sort());
+  fillFilter('fStatus', STATUSES);
+  render();
+}
+function fillFilter(id, values){
+  const sel=$(id), keep=sel.value; sel.length=1;
+  values.forEach(v=>sel.add(new Option(v,v)));
+  if(values.includes(keep)) sel.value=keep;
+}
+
+/* ============================================================
+   4. 필터 · 요약 · 표
+   ============================================================ */
+function filtered(){
+  const q=$('q').value.trim().toLowerCase();
+  const t=$('fTier').value, c=$('fCountry').value,
+        s=$('fStatus').value, o=$('fOwner').value;
+  const mon=mondayOfWeek();
+  const out = rows.filter(r=>{
+    if(QF.tier1 && r.tier!=='Tier 1') return false;
+    if(QF.mail  && !r.email) return false;
+    if(QF.todo  && !['후보','검토완료'].includes(r.status)) return false;
+    if(QF.week  && !(r.status==='회신옴' && r.last_touch && r.last_touch>=mon)) return false;
+    if(t && tierOf(r)!==t) return false;
+    if(c && r.country!==c) return false;
+    if(s && r.status !==s) return false;
+    if(o && r.owner  !==o) return false;
+    if(!q) return true;
+    return [r.company,r.contact_name,r.email,r.interest,r.type,r.country,r.notes,r.owner]
+      .some(v=>(v||'').toLowerCase().includes(q));
+  });
+  const by=$('fSort').value;
+  const name=(a,b)=>String(a.company).localeCompare(String(b.company));
+  if(by==='name')   return out.sort(name);
+  if(by==='recent') return out.sort((a,b)=>
+     String(b.last_touch||'').localeCompare(String(a.last_touch||'')) || name(a,b));
+  return out.sort((a,b)=>(TRANK[tierOf(a)]-TRANK[tierOf(b)]) || name(a,b));
+}
+function renderTiles(list){
+  const mon=mondayOfWeek();
+  const nS=st=>list.filter(r=>r.status===st).length;
+  const cells=[
+    {k:'표시 중',      v:list.length, cls:'hero'},
+    {k:'이메일 확보',  v:list.filter(r=>r.email).length},
+    {k:'메일 발송',    v:nS('메일발송'),  bg:'#e4f2f6', bd:'#bcdde6', fg:'var(--st-mail)'},
+    {k:'이번 주 회신', v:list.filter(r=>r.status==='회신옴'&&r.last_touch&&r.last_touch>=mon).length,
+                       bg:'#eaf2fd', bd:'#cfe2fa', fg:'var(--blue)'},
+    {k:'협상중',       v:nS('협상중'),    bg:'#fdeee6', bd:'#f4d3bf', fg:'var(--st-nego)'},
+    {k:'성사',         v:nS('성사'),      bg:'#e8f6ec', bd:'#bfe3cb', fg:'var(--st-win)'},
+  ];
+  $('tiles').innerHTML = cells.map(c=>{
+    const box = c.bg ? `background:${c.bg};border-color:${c.bd}` : '';
+    const num = c.fg ? `color:${c.fg}` : '';
+    return `<div class="tile ${c.cls||''}" style="${box}">
+       <div class="t-k">${esc(c.k)}</div>
+       <div class="t-v" style="${num}">${c.v}</div>
+     </div>`;
+  }).join('');
+}
+function render(){
+  const list=filtered();
+  renderTiles(list);
+  $('empty').classList.toggle('hidden', list.length>0);
+  if(hasTier) $('foot').textContent = `전체 ${rows.length}곳 중 ${list.length}곳 표시`;
+
+  $('rows').innerHTML = list.map(r=>{
+    const tv=tierOf(r);
+    const scol=SC[r.status]||'var(--st-huho)';
+    const mail=r.email ? `<a href="mailto:${esc(r.email)}">${esc(r.email)}</a>`
+                       : `<span class="muted">미확보</span>`;
+    const site=r.website ? `<div class="c-sub"><a href="${esc(r.website)}" target="_blank" rel="noopener">웹사이트</a></div>` : '';
+    return `
+  <tr data-row="${r.id}">
+    <td data-l="티어" class="nowrap">
+      <span class="tiertxt${r.tier?'':' none'}">${esc(tv)}</span>
+    </td>
+    <td class="cell-name">
+      <div class="c-name">${esc(r.company)}</div>
+      <div class="c-sub">${esc(r.type)||'&nbsp;'}</div>${site}
+    </td>
+    <td class="small nowrap" data-l="국가">${esc(r.country)||'—'}</td>
+    <td class="small" data-l="담당자">${esc(r.contact_name)||'—'}</td>
+    <td class="small cell-mail" data-l="이메일">${mail}</td>
+    <td data-l="상태">
+      <select class="stsel" data-st="${r.id}"
+              style="color:${scol};border-color:${scol};background:${SB[r.status]||'#fff'}">
+        ${STATUSES.map(s=>`<option ${s===r.status?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </td>
+    <td class="small nowrap" data-l="최근 연락">${esc(r.last_touch)||'—'}</td>
+    <td class="nowrap" data-l="">
+      <div class="rowbtns">
+        <button class="linkbtn" data-open="${r.id}">상세 ▸</button>
+        <button class="linkbtn" data-edit="${r.id}">수정</button>
+      </div>
+    </td>
+  </tr>
+  <tr class="detail hidden" data-d="${r.id}">
+    <td colspan="8" data-l="">
+      <dl>
+        <div><dt>관심사 / 취급 상품</dt><dd>${esc(r.interest)||'—'}</dd></div>
+        <div><dt>정보 출처 · 근거</dt><dd>${esc(r.evidence)||'—'}</dd></div>
+        <div><dt>메모</dt><dd>${esc(r.notes)||'—'}</dd></div>
+        <div><dt>담당 직원</dt><dd>${esc(r.owner)||'—'}</dd></div>
+      </dl>
+    </td>
+  </tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   5. 표 안 동작
+   ============================================================ */
+function toggleDetail(id){
+  const d=document.querySelector(`[data-d="${id}"]`);
+  const b=document.querySelector(`[data-open="${id}"]`);
+  if(!d) return;
+  const closed=d.classList.toggle('hidden');
+  if(b) b.textContent = closed ? '상세 ▸' : '상세 ▾';
+}
+
+$('rows').addEventListener('click', e=>{
+  // 수정 버튼
+  const ed=e.target.closest('[data-edit]');
+  if(ed){ openForm(rows.find(r=>r.id==ed.dataset.edit)); return; }
+  // 상세 버튼
+  const op=e.target.closest('[data-open]');
+  if(op){ toggleDetail(op.dataset.open); return; }
+  // 링크·선택상자는 원래 동작 유지 (메일 열기, 사이트 열기, 상태 변경)
+  if(e.target.closest('a, select, input, textarea, button')) return;
+  // 그 외 행 아무 곳이나 → 상세 펼치기
+  const tr=e.target.closest('tr[data-row]');
+  if(tr) toggleDetail(tr.dataset.row);
+});
+
+$('rows').addEventListener('change', async e=>{
+  const ss=e.target.closest('[data-st]');
+  if(ss){
+    const id=Number(ss.dataset.st), v=ss.value, d=today();
+    const {error}=await sb.from('buyers').update({status:v,last_touch:d}).eq('id',id);
+    if(error){ alert('상태 저장 실패: '+error.message); return; }
+    const r=rows.find(x=>x.id===id); r.status=v; r.last_touch=d; render();
+  }
+});
+
+['q','fTier','fCountry','fStatus','fOwner','fSort'].forEach(id=>$(id).addEventListener('input',render));
+
+document.querySelectorAll('[data-qf]').forEach(b=>b.addEventListener('click',()=>{
+  const k=b.dataset.qf; QF[k]=!QF[k]; b.classList.toggle('on',QF[k]);
+  if(k==='tier1' && QF.tier1) $('fTier').value='';
+  render();
+}));
+
+$('btnReset').addEventListener('click', ()=>{
+  ['q','fTier','fCountry','fStatus','fOwner'].forEach(id=>$(id).value='');
+  $('fSort').value='tier';
+  Object.keys(QF).forEach(k=>QF[k]=false);
+  document.querySelectorAll('[data-qf]').forEach(b=>b.classList.remove('on'));
+  render();
+});
+
+/* ============================================================
+   5-B. 엑셀 내보내기
+   ============================================================ */
+const CSV_COLS=[['tier','티어'],['company','회사명'],['country','국가'],['type','업체유형'],
+  ['contact_name','담당자'],['email','이메일'],['website','웹사이트'],['status','상태'],
+  ['owner','담당 직원'],['last_touch','마지막 연락일'],['interest','관심사/취급상품'],
+  ['evidence','정보 출처·근거'],['notes','메모']];
+
+$('btnCsv').addEventListener('click', ()=>{
+  const list=filtered();
+  if(!list.length){ alert('내보낼 바이어가 없습니다.'); return; }
+  const cell=v=>{ let s=String(v??''); if(/^[=+\-@]/.test(s)) s="'"+s;
+                  return '"'+s.replace(/"/g,'""')+'"'; };
+  const lines=[CSV_COLS.map(c=>cell(c[1])).join(',')];
+  list.forEach(r=>lines.push(CSV_COLS.map(c=>cell(r[c[0]])).join(',')));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=url; a.download=`buyers_${today()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+
+/* ============================================================
+   6. 추가 / 수정
+   ============================================================ */
+STATUSES.forEach(s=>$('i_status').add(new Option(s,s)));
+$('i_tier').add(new Option(NOTIER,''));
+TIERS.forEach(t=>$('i_tier').add(new Option(t,t)));
+
+function openForm(r){
+  editingId = r ? r.id : null; delArmed=false;
+  $('formTitle').textContent = r ? '바이어 수정' : '바이어 추가';
+  $('formMsg').textContent='';
+  $('btnDel').classList.toggle('hidden', !r); $('btnDel').textContent='삭제';
+  $('i_company').value = r?.company      ?? '';
+  $('i_tier').value    = r?.tier         ?? '';
+  $('i_status').value  = r?.status       ?? '후보';
+  $('i_country').value = r?.country      ?? '';
+  $('i_type').value    = r?.type         ?? '';
+  $('i_contact').value = r?.contact_name ?? '';
+  $('i_email').value   = r?.email        ?? '';
+  $('i_website').value = r?.website      ?? '';
+  $('i_owner').value   = r?.owner        ?? '';
+  $('i_last').value    = r?.last_touch   ?? '';
+  $('i_interest').value= r?.interest     ?? '';
+  $('i_evidence').value= r?.evidence     ?? '';
+  $('i_notes').value   = r?.notes        ?? '';
+  $('formBack').classList.remove('hidden'); $('i_company').focus();
+}
+const closeForm=()=>$('formBack').classList.add('hidden');
+$('btnNew').addEventListener('click',()=>openForm(null));
+$('btnCancel').addEventListener('click',closeForm);
+$('formX').addEventListener('click',closeForm);
+$('formBack').addEventListener('click',e=>{ if(e.target===$('formBack')) closeForm(); });
+
+$('buyerForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const val=id=>{ const v=$(id).value.trim(); return v===''?null:v; };
+  const payload={
+    company:$('i_company').value.trim(), tier:val('i_tier'),
+    country:val('i_country'), type:val('i_type'),
+    contact_name:val('i_contact'), email:val('i_email'),
+    website:val('i_website'), status:$('i_status').value,
+    owner:val('i_owner'), last_touch:val('i_last'),
+    interest:val('i_interest'), evidence:val('i_evidence'), notes:val('i_notes')};
+  $('formMsg').className='msg info'; $('formMsg').textContent='저장 중...';
+  $('btnSave').disabled=true;
+  const res = editingId
+    ? await sb.from('buyers').update(payload).eq('id',editingId)
+    : await sb.from('buyers').insert(payload);
+  $('btnSave').disabled=false;
+  if(res.error){
+    $('formMsg').className='msg bad';
+    $('formMsg').textContent = res.error.code==='23505'
+      ? '이미 같은 이메일로 등록된 바이어가 있습니다.' : '저장 실패: '+res.error.message;
+    return;
+  }
+  closeForm(); await load();
+});
+
+$('btnDel').addEventListener('click', async ()=>{
+  if(!delArmed){ delArmed=true; $('btnDel').textContent='정말 삭제? 한 번 더'; return; }
+  const {error}=await sb.from('buyers').delete().eq('id',editingId);
+  if(error){ $('formMsg').className='msg bad'; $('formMsg').textContent='삭제 실패: '+error.message; return; }
+  closeForm(); await load();
+});
+
+/* ============================================================
+   7. 비밀번호 변경
+   ============================================================ */
+$('btnPw').addEventListener('click',()=>{
+  $('pw1').value=''; $('pw2').value=''; $('pwMsg').textContent='';
+  $('pwBack').classList.remove('hidden');
+});
+const closePw=()=>$('pwBack').classList.add('hidden');
+$('pwX').addEventListener('click',closePw);
+$('pwCancel').addEventListener('click',closePw);
+$('pwBack').addEventListener('click',e=>{ if(e.target===$('pwBack')) closePw(); });
+$('pwForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const a=$('pw1').value, b=$('pw2').value, m=$('pwMsg');
+  if(a!==b){ m.className='msg bad'; m.textContent='두 칸이 서로 다릅니다.'; return; }
+  m.className='msg info'; m.textContent='변경 중...';
+  const {error}=await sb.auth.updateUser({password:a});
+  if(error){ m.className='msg bad'; m.textContent='변경 실패: '+error.message; return; }
+  m.className='msg ok'; m.textContent='✓ 변경되었습니다. 다음 로그인부터 새 비밀번호를 쓰세요.';
+  $('pw1').value=''; $('pw2').value='';
+});
+
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeForm(); closePw(); } });
+
+/* ============================================================
+   8. 시작
+   ============================================================ */
+if(boot()){
+  sb.auth.onAuthStateChange((_e,session)=>{ if(session?.user) enterApp(session.user); });
+  sb.auth.getSession().then(({data:{session}})=>{ if(session?.user) enterApp(session.user); });
+}
+</script>
+</body>
+</html>
