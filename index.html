@@ -146,6 +146,24 @@ tbody tr.detail{cursor:default}
 .req{color:var(--st-hold)}
 .hint{font-size:11.5px; color:var(--ink3); margin-top:4px}
 
+/* ── 가져오기 ── */
+.drop{border:2px dashed var(--line2); border-radius:12px; padding:22px 16px;
+      text-align:center; background:#fbfcfd}
+.drop.hot{border-color:var(--blue); background:var(--blue-soft)}
+.drop p{margin:0 0 10px; color:var(--ink2)}
+.imptbl{width:100%; border-collapse:collapse; margin-top:6px}
+.imptbl th{position:sticky; top:0}
+.imptbl td{padding:7px 9px; font-size:12.5px; border-bottom:1px solid #f0f2f5}
+.impscroll{max-height:300px; overflow:auto; border:1px solid var(--line);
+           border-radius:10px; margin-top:12px}
+.pill{display:inline-block; border-radius:999px; padding:1px 9px; font-size:11.5px;
+      font-weight:700; white-space:nowrap}
+.pill.new{background:#e8f6ec; color:#15803d}
+.pill.dup{background:#f3f4f6; color:#6b7280}
+.impsum{display:flex; gap:8px; flex-wrap:wrap; margin-top:14px}
+.impsum span{background:#f3f5f8; border:1px solid var(--line);
+             border-radius:8px; padding:6px 12px; font-size:13px; font-weight:650}
+
 /* ── 메일 조건 설정 ── */
 .setgrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px 14px}
 .setgrid .f.span2{grid-column:span 2}
@@ -228,6 +246,7 @@ tbody tr.detail{cursor:default}
     <button class="btn" id="btnSet">메일 조건</button>
     <button class="btn" id="btnPw">비밀번호</button>
     <button class="btn" id="btnOut">로그아웃</button>
+    <button class="btn" id="btnImp">⤒ 가져오기</button>
     <button class="btn btn-primary" id="btnNew">+ 바이어 추가</button>
   </div></div>
 
@@ -320,6 +339,46 @@ tbody tr.detail{cursor:default}
         <button class="btn btn-primary" type="submit" id="btnSave">저장</button>
       </footer>
     </form>
+  </div>
+</div>
+
+<!-- 가져오기 -->
+<div class="backdrop hidden" id="impBack">
+  <div class="modal" style="max-width:860px" role="dialog" aria-modal="true">
+    <header><h2>신규 바이어 가져오기</h2>
+      <button class="btn" id="impX" aria-label="닫기">닫기</button></header>
+    <div class="body">
+      <div class="hint" style="margin:-4px 0 14px">
+        아침 발굴 작업이 보내준 <b>신규바이어.json</b> 파일을 고르세요.
+        이미 등록된 곳은 자동으로 걸러냅니다.
+      </div>
+
+      <div class="drop" id="impDrop">
+        <p>파일을 이 칸에 끌어다 놓거나</p>
+        <input type="file" id="impFile" accept=".json,application/json" hidden>
+        <button class="btn btn-primary" type="button" id="impPick">파일 고르기</button>
+      </div>
+
+      <details style="margin-top:12px">
+        <summary class="hint" style="cursor:pointer">파일 대신 내용을 붙여넣기</summary>
+        <textarea class="fld" id="impText" style="min-height:90px; margin-top:8px"
+                  placeholder='{"buyers":[ ... ]}'></textarea>
+      </details>
+
+      <div class="impsum hidden" id="impSum"></div>
+      <div class="impscroll hidden" id="impScroll">
+        <table class="imptbl"><thead><tr>
+          <th>결과</th><th>티어</th><th>회사명</th><th>국가</th><th>이메일</th>
+        </tr></thead><tbody id="impRows"></tbody></table>
+      </div>
+
+      <div class="msg" id="impMsg"></div>
+    </div>
+    <footer>
+      <div class="spacer"></div>
+      <button class="btn" type="button" id="impCancel">닫기</button>
+      <button class="btn btn-primary" type="button" id="impGo" disabled>등록</button>
+    </footer>
   </div>
 </div>
 
@@ -763,6 +822,139 @@ $('btnDel').addEventListener('click', async ()=>{
 });
 
 /* ============================================================
+   6-A. 신규 바이어 가져오기
+   ------------------------------------------------------------
+   중복 판정은 세 가지 — 회사명 / 이메일 / 웹사이트 도메인.
+   하나라도 걸리면 등록하지 않습니다.
+   ============================================================ */
+const nComp = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9가-힣]/g,'');
+const nMail = s => String(s ?? '').trim().toLowerCase();
+const nDom  = s => { let v=String(s ?? '').trim().toLowerCase();
+  if(!v) return '';
+  v = v.replace(/^[a-z]+:\/\//,'').split(/[\/?#]/)[0].replace(/^www\./,'');
+  return v; };
+
+let impReady = [];
+
+function impReset(){
+  impReady=[];
+  $('impGo').disabled=true;
+  $('impSum').classList.add('hidden'); $('impScroll').classList.add('hidden');
+  $('impRows').innerHTML=''; $('impMsg').textContent='';
+}
+
+function impParse(raw){
+  impReset();
+  let data;
+  try{ data = JSON.parse(raw); }
+  catch(err){
+    $('impMsg').className='msg bad';
+    $('impMsg').textContent='JSON 형식이 아닙니다: '+err.message; return;
+  }
+  const items = Array.isArray(data) ? data : data.buyers;
+  if(!Array.isArray(items)){
+    $('impMsg').className='msg bad';
+    $('impMsg').textContent='buyers 목록을 찾지 못했습니다.'; return;
+  }
+
+  // 기존 데이터로 대조표를 만듭니다
+  const C=new Set(), M=new Set(), D=new Set();
+  rows.forEach(r=>{ if(r.company) C.add(nComp(r.company));
+                    if(r.email) M.add(nMail(r.email));
+                    const d=nDom(r.website); if(d) D.add(d); });
+
+  const seen=[], dups=[];
+  items.forEach(it=>{
+    const g = k => { const v=it[k]; const s=(typeof v==='string')?v.trim():v;
+                     return (s===''||s==null)?null:s; };
+    const row = {company:g('company'), country:g('country'), type:g('type'),
+      contact_name:g('contact_name'), email:g('email'), website:g('website'),
+      evidence:g('evidence'), interest:g('interest'),
+      tier: TIERS.includes(g('tier')) ? g('tier') : null,
+      notes:g('notes'), status:'후보', owner:null, last_touch:null};
+    if(!row.company) return;
+    const c=nComp(row.company), m=nMail(row.email), d=nDom(row.website);
+    let why = C.has(c) ? '회사명 중복'
+            : (m && M.has(m)) ? '이메일 중복'
+            : (d && D.has(d)) ? '웹사이트 중복' : null;
+    if(why){ dups.push([row,why]); return; }
+    C.add(c); if(m) M.add(m); if(d) D.add(d);   // 파일 안에서의 중복도 잡습니다
+    seen.push(row);
+  });
+
+  impReady = seen;
+  $('impSum').classList.remove('hidden');
+  $('impSum').innerHTML =
+      `<span>파일 ${items.length}곳</span>`
+    + `<span style="color:var(--st-win)">새로 등록 ${seen.length}곳</span>`
+    + `<span class="muted">중복 ${dups.length}곳</span>`;
+
+  const line = (r,cls,label) => `<tr>
+      <td><span class="pill ${cls}">${esc(label)}</span></td>
+      <td class="nowrap">${esc(r.tier||'미분류')}</td>
+      <td>${esc(r.company)}</td>
+      <td class="nowrap">${esc(r.country)||'—'}</td>
+      <td>${esc(r.email)||'<span class="muted">미확보</span>'}</td></tr>`;
+  $('impRows').innerHTML =
+      seen.map(r=>line(r,'new','등록')).join('')
+    + dups.map(([r,w])=>line(r,'dup',w)).join('');
+  $('impScroll').classList.remove('hidden');
+
+  $('impGo').disabled = seen.length===0;
+  if(!seen.length){
+    $('impMsg').className='msg info';
+    $('impMsg').textContent='새로 등록할 곳이 없습니다. 전부 이미 들어와 있습니다.';
+  }
+}
+
+function impRead(file){
+  if(!file){ return; }
+  const fr=new FileReader();
+  fr.onload = () => impParse(String(fr.result));
+  fr.onerror = () => { $('impMsg').className='msg bad';
+                       $('impMsg').textContent='파일을 읽지 못했습니다.'; };
+  fr.readAsText(file, 'utf-8');
+}
+
+$('btnImp').addEventListener('click', ()=>{
+  impReset(); $('impFile').value=''; $('impText').value='';
+  $('impBack').classList.remove('hidden');
+});
+const closeImp=()=>$('impBack').classList.add('hidden');
+$('impX').addEventListener('click',closeImp);
+$('impCancel').addEventListener('click',closeImp);
+$('impBack').addEventListener('click',e=>{ if(e.target===$('impBack')) closeImp(); });
+$('impPick').addEventListener('click',()=>$('impFile').click());
+$('impFile').addEventListener('change',e=>impRead(e.target.files[0]));
+$('impText').addEventListener('input',e=>{
+  const v=e.target.value.trim(); if(v) impParse(v); else impReset();
+});
+['dragenter','dragover'].forEach(t=>$('impDrop').addEventListener(t,e=>{
+  e.preventDefault(); $('impDrop').classList.add('hot'); }));
+['dragleave','drop'].forEach(t=>$('impDrop').addEventListener(t,e=>{
+  e.preventDefault(); $('impDrop').classList.remove('hot'); }));
+$('impDrop').addEventListener('drop',e=>impRead(e.dataTransfer.files[0]));
+
+$('impGo').addEventListener('click', async ()=>{
+  if(!impReady.length) return;
+  $('impGo').disabled=true;
+  $('impMsg').className='msg info';
+  let ok=0; const bad=[];
+  for(let i=0;i<impReady.length;i++){
+    $('impMsg').textContent=`등록 중... ${i+1} / ${impReady.length}`;
+    const {error} = await sb.from('buyers').insert(impReady[i]);
+    if(error) bad.push(`${impReady[i].company} — ${
+      error.code==='23505' ? '이미 등록된 이메일' : error.message}`);
+    else ok++;
+  }
+  await load();
+  $('impMsg').className = bad.length ? 'msg bad' : 'msg ok';
+  $('impMsg').innerHTML = `✓ ${ok}곳 등록했습니다.`
+    + (bad.length ? `<br>실패 ${bad.length}곳 — ${esc(bad.join(' / '))}` : '');
+  impReady=[];
+});
+
+/* ============================================================
    6-B. 콜드메일 거래조건
    ------------------------------------------------------------
    여기 계산식은 send_cold_mail.py 의 derive() 와 반드시 같아야 합니다.
@@ -912,7 +1104,7 @@ $('pwForm').addEventListener('submit', async e=>{
   $('pw1').value=''; $('pw2').value='';
 });
 
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); closeImp(); } });
 
 /* ============================================================
    8. 시작
