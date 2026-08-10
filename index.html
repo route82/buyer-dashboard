@@ -123,6 +123,9 @@ tbody tr.detail{cursor:default}
 .detail dl{margin:0; display:grid; gap:9px}
 .detail dt{font-size:11.5px; font-weight:700; color:var(--ink3)}
 .detail dd{margin:2px 0 0}
+.tag{display:inline-block; background:#eef1f5; border:1px solid var(--line);
+     border-radius:999px; padding:2px 9px; font-size:11.5px; font-weight:650;
+     color:var(--ink2); margin:2px 4px 0 0; white-space:nowrap}
 
 /* ── 모달 ── */
 .backdrop{position:fixed; inset:0; background:rgba(17,24,39,.45); z-index:50;
@@ -147,7 +150,8 @@ tbody tr.detail{cursor:default}
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:8px}
   .t-v{font-size:22px}
-  .toolbar select,.toolbar .grow{flex:1 1 100%}
+  .toolbar .grow{flex:1 1 100%}
+  .toolbar select{flex:1 1 calc(50% - 4px); min-width:0}
   thead{display:none}
   table,tbody,tr,td{display:block; width:100%}
   tbody tr{border-bottom:8px solid var(--bg); padding:4px 0}
@@ -217,6 +221,7 @@ tbody tr.detail{cursor:default}
       <input class="fld grow" type="search" id="q"
              placeholder="회사명·담당자·이메일·취급상품 검색">
       <select class="fld" id="fTier"><option value="">티어 전체</option></select>
+      <select class="fld" id="fCat" title="업체유형으로 분류합니다"><option value="">분류 전체</option></select>
       <select class="fld" id="fCountry"><option value="">국가 전체</option></select>
       <select class="fld" id="fStatus"><option value="">상태 전체</option></select>
       <select class="fld" id="fOwner"><option value="">담당자 전체</option></select>
@@ -334,6 +339,24 @@ const TB = {'Tier 1':'#e8f6ec','Tier 2':'#fdf3e3','Tier 3':'#fdecec','제외':'#
 const TRANK = {'Tier 1':1,'Tier 2':2,'Tier 3':3,[NOTIER]:8,'제외':9};
 const tierOf = r => r.tier || NOTIER;
 
+/* 업체유형(type) 글자를 보고 자동으로 분류합니다.
+   한 회사가 여러 분류에 걸릴 수 있습니다 (예: "TCG·완구 종합 도매유통").
+   분류 기준을 바꾸고 싶으면 아래 단어 목록만 고치면 됩니다. */
+const CATS = [
+  ['TCG·카드 전문',  /TCG|트레이딩\s?카드|카드샵|스포츠카드|카드/i],
+  ['도매·유통',      /도매|유통|총판|수입|B2B|딜러망|드롭십/i],
+  ['리테일·매장',    /리테일|소매|매장|체인|마켓플레이스|판매|샵|스토어/i],
+  ['하비·완구',      /하비|완구|보드게임|프라모델|모형|아트토이|레고|문구/i],
+  ['라이선스 굿즈',  /라이선스|라이센스|팝컬처|애니|굿즈|머천|수집품|컬렉터블|블라인드박스|의류/i],
+  ['e스포츠·게이밍', /e스포츠|이스포츠|게이밍|게임|구단|LoL/i],
+  ['K-POP·K콘텐츠',  /K-?POP|K콘텐츠|K팝/i],
+  ['브레이커·매입',  /브레이커|매입|그레이딩/i],
+  ['제조·퍼블리셔',  /제조|퍼블리셔|퍼블리싱|발행사|로컬라이저|출판/i],
+  ['접촉 대상 아님', /협회|경쟁|벤치마크|플랫폼/i],
+];
+const NOCAT = '기타';
+const catsOf = r => { const t=r.type||''; return CATS.filter(c=>c[1].test(t)).map(c=>c[0]); };
+
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -391,12 +414,23 @@ async function load(){
   fillFilter('fCountry',[...new Set(rows.map(r=>r.country).filter(Boolean))].sort());
   fillFilter('fOwner',  [...new Set(rows.map(r=>r.owner).filter(Boolean))].sort());
   fillFilter('fStatus', STATUSES);
+  fillCat();
   render();
 }
 function fillFilter(id, values){
   const sel=$(id), keep=sel.value; sel.length=1;
   values.forEach(v=>sel.add(new Option(v,v)));
   if(values.includes(keep)) sel.value=keep;
+}
+/* 분류 목록은 실제 데이터에서 만들고, 옆에 건수를 같이 보여줍니다. */
+function fillCat(){
+  const sel=$('fCat'), keep=sel.value; sel.length=1;
+  const cnt={}; let other=0;
+  rows.forEach(r=>{ const cs=catsOf(r);
+    if(!cs.length) other++; else cs.forEach(n=>cnt[n]=(cnt[n]||0)+1); });
+  CATS.forEach(c=>{ if(cnt[c[0]]) sel.add(new Option(`${c[0]} (${cnt[c[0]]})`, c[0])); });
+  if(other) sel.add(new Option(`${NOCAT} (${other})`, NOCAT));
+  sel.value = keep;          // 없는 값이면 자동으로 '분류 전체'
 }
 
 /* ============================================================
@@ -405,9 +439,11 @@ function fillFilter(id, values){
 function filtered(){
   const q=$('q').value.trim().toLowerCase();
   const t=$('fTier').value, c=$('fCountry').value,
-        s=$('fStatus').value, o=$('fOwner').value;
+        s=$('fStatus').value, o=$('fOwner').value, g=$('fCat').value;
   const mon=mondayOfWeek();
   const out = rows.filter(r=>{
+    if(g){ const cs=catsOf(r);
+           if(g===NOCAT ? cs.length>0 : !cs.includes(g)) return false; }
     if(QF.tier1 && r.tier!=='Tier 1') return false;
     if(QF.mail  && !r.email) return false;
     if(QF.todo  && !['후보','검토완료'].includes(r.status)) return false;
@@ -489,6 +525,8 @@ function render(){
   <tr class="detail hidden" data-d="${r.id}">
     <td colspan="8" data-l="">
       <dl>
+        <div><dt>분류</dt><dd>${catsOf(r).map(n=>`<span class="tag">${esc(n)}</span>`).join('')||'—'}</dd></div>
+        <div><dt>업체유형 (원문)</dt><dd>${esc(r.type)||'—'}</dd></div>
         <div><dt>관심사 / 취급 상품</dt><dd>${esc(r.interest)||'—'}</dd></div>
         <div><dt>정보 출처 · 근거</dt><dd>${esc(r.evidence)||'—'}</dd></div>
         <div><dt>메모</dt><dd>${esc(r.notes)||'—'}</dd></div>
@@ -534,7 +572,7 @@ $('rows').addEventListener('change', async e=>{
   }
 });
 
-['q','fTier','fCountry','fStatus','fOwner','fSort'].forEach(id=>$(id).addEventListener('input',render));
+['q','fTier','fCat','fCountry','fStatus','fOwner','fSort'].forEach(id=>$(id).addEventListener('input',render));
 
 document.querySelectorAll('[data-qf]').forEach(b=>b.addEventListener('click',()=>{
   const k=b.dataset.qf; QF[k]=!QF[k]; b.classList.toggle('on',QF[k]);
@@ -543,7 +581,7 @@ document.querySelectorAll('[data-qf]').forEach(b=>b.addEventListener('click',()=
 }));
 
 $('btnReset').addEventListener('click', ()=>{
-  ['q','fTier','fCountry','fStatus','fOwner'].forEach(id=>$(id).value='');
+  ['q','fTier','fCat','fCountry','fStatus','fOwner'].forEach(id=>$(id).value='');
   $('fSort').value='tier';
   Object.keys(QF).forEach(k=>QF[k]=false);
   document.querySelectorAll('[data-qf]').forEach(b=>b.classList.remove('on'));
@@ -554,6 +592,7 @@ $('btnReset').addEventListener('click', ()=>{
    5-B. 엑셀 내보내기
    ============================================================ */
 const CSV_COLS=[['tier','티어'],['company','회사명'],['country','국가'],['type','업체유형'],
+  ['__cat','분류'],
   ['contact_name','담당자'],['email','이메일'],['website','웹사이트'],['status','상태'],
   ['owner','담당 직원'],['last_touch','마지막 연락일'],['interest','관심사/취급상품'],
   ['evidence','정보 출처·근거'],['notes','메모']];
@@ -564,7 +603,8 @@ $('btnCsv').addEventListener('click', ()=>{
   const cell=v=>{ let s=String(v??''); if(/^[=+\-@]/.test(s)) s="'"+s;
                   return '"'+s.replace(/"/g,'""')+'"'; };
   const lines=[CSV_COLS.map(c=>cell(c[1])).join(',')];
-  list.forEach(r=>lines.push(CSV_COLS.map(c=>cell(r[c[0]])).join(',')));
+  const pick=(r,k)=> k==='__cat' ? catsOf(r).join(' · ') : r[k];
+  list.forEach(r=>lines.push(CSV_COLS.map(c=>cell(pick(r,c[0]))).join(',')));
   const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob), a=document.createElement('a');
   a.href=url; a.download=`buyers_${today()}.csv`;
