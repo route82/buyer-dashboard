@@ -817,6 +817,7 @@ STATUSES.forEach(s=>$('i_status').add(new Option(s,s)));
 $('i_tier').add(new Option(NOTIER,''));
 TIERS.forEach(t=>$('i_tier').add(new Option(t,t)));
 
+
 function openForm(r){
   editingId = r ? r.id : null; delArmed=false;
   $('formTitle').textContent = r ? '바이어 수정' : '바이어 추가';
