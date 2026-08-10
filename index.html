@@ -164,7 +164,7 @@ tbody tr.detail{cursor:default}
 .impsum span{background:#f3f5f8; border:1px solid var(--line);
              border-radius:8px; padding:6px 12px; font-size:13px; font-weight:650}
 
-/* ── 메일 조건 설정 ── */
+/* ── 거래조건 설정 ── */
 .setgrid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px 14px}
 .setgrid .f.span2{grid-column:span 2}
 .setgrid .f.span3{grid-column:1 / -1}
@@ -245,7 +245,7 @@ tbody tr.detail{cursor:default}
     <div class="brand"><span class="dotmark"></span>바이어 관리</div>
     <div class="spacer"></div>
     <span class="whoami" id="whoami"></span>
-    <button class="btn" id="btnSet">메일 조건</button>
+    <button class="btn" id="btnSet">거래조건</button>
     <button class="btn" id="btnPw">비밀번호</button>
     <button class="btn" id="btnOut">로그아웃</button>
     <button class="btn" id="btnImp">⤒ 가져오기</button>
@@ -384,16 +384,17 @@ tbody tr.detail{cursor:default}
   </div>
 </div>
 
-<!-- 메일 조건 -->
+<!-- 거래조건 -->
 <div class="backdrop hidden" id="setBack">
   <div class="modal" role="dialog" aria-modal="true">
-    <header><h2>콜드메일 거래조건</h2>
+    <header><h2>거래조건 — 관심 회신에 답할 때 쓰는 정보</h2>
       <button class="btn" id="setX" aria-label="닫기">닫기</button></header>
     <form id="setForm">
       <div class="body">
         <div class="hint" style="margin:-4px 0 14px">
-          여기서 바꾼 값이 발송 스크립트가 보내는 모든 메일에 그대로 들어갑니다.
-          초안 파일은 고치지 않아도 됩니다.
+          바이어가 관심을 밝히고 회신해 왔을 때, 답장에 넣을 가격·조건·물류 정보입니다.
+          <b>첫 콜드메일에는 아래 MOQ 문장 한 줄만 들어갑니다</b> — 가격은 나가지 않습니다.
+          값을 한 번 고치면 모든 메일에 반영되므로 초안 파일은 손대지 않아도 됩니다.
         </div>
 
         <div class="setgrid">
@@ -468,16 +469,16 @@ tbody tr.detail{cursor:default}
           <h3>자동 계산 — 아래 값은 직접 못 고칩니다</h3>
           <table id="calcTbl"></table>
           <div class="moqline">
-            <b>콜드메일에 들어가는 MOQ 문장</b>
+            <b>첫 콜드메일에 들어가는 MOQ 문장 — 여기서 유일하게 콜드메일용</b>
             <span id="moqPrev"></span>
           </div>
           <div class="moqline">
-            <b>카탈로그 회신에 붙여넣을 문단 <button type="button" class="linkbtn"
+            <b>회신 메일에 붙여넣을 거래조건 문단 <button type="button" class="linkbtn"
                id="btnCopyTerms" style="float:right">복사</button></b>
             <pre id="termsPrev"></pre>
           </div>
           <div class="moqline">
-            <b>물류 정보 문단 <button type="button" class="linkbtn"
+            <b>회신 메일에 붙여넣을 물류 문단 <button type="button" class="linkbtn"
                id="btnCopySpec" style="float:right">복사</button></b>
             <pre id="specPrev"></pre>
           </div>
@@ -1014,7 +1015,7 @@ $('impGo').addEventListener('click', async ()=>{
 });
 
 /* ============================================================
-   6-B. 콜드메일 거래조건
+   6-B. 거래조건 (회신 메일용)
    ------------------------------------------------------------
    여기 계산식은 send_cold_mail.py 의 derive() 와 반드시 같아야 합니다.
    한쪽만 고치면 화면과 실제 메일의 숫자가 달라집니다.
@@ -1111,7 +1112,7 @@ function specTerms(s, v){
   if(tot.length) out.push(L(`At MOQ (${s.moq_cartons} cartons)`, tot.join(' / ')));
   return out.join('\n');
 }
-/* 카탈로그 회신에 그대로 붙여넣는 거래조건 블록.
+/* 회신 메일에 그대로 붙여넣는 거래조건 블록.
    ※ send_cold_mail.py 의 trade_terms() 와 글자 하나까지 같아야 합니다. */
 function tradeTerms(s, d){
   const L = (k,v) => '  ' + k.padEnd(22) + v;
@@ -1191,8 +1192,8 @@ function renderCalc(){
   w.classList.toggle('hidden', miss.length===0 && bad.length===0);
   w.innerHTML = [
     bad.length ? '⚠ ' + bad.join(' ') : '',
-    miss.length ? `${miss.join(' · ')}이(가) 비어 있습니다. 콜드메일에는 안 쓰이지만 `
-                + `카탈로그 회신에 필요합니다. 빈 항목은 위 문단에서 아예 빠집니다.` : '',
+    miss.length ? `${miss.join(' · ')}이(가) 비어 있습니다. 첫 콜드메일에는 안 쓰이지만 `
+                + `회신 메일에는 필요합니다. 빈 항목은 위 문단에서 줄째로 빠집니다.` : '',
   ].filter(Boolean).join('<br>');
 }
 
