@@ -146,6 +146,30 @@ tbody tr.detail{cursor:default}
 .req{color:var(--st-hold)}
 .hint{font-size:11.5px; color:var(--ink3); margin-top:4px}
 
+/* ── 상품 고르기 ── */
+#pick{max-width:1000px; margin:0 auto; padding:40px 16px 72px}
+#pick .lead{color:var(--ink2); margin:6px 0 26px}
+.pgrid{display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.pcard{background:var(--card); border:1px solid var(--line); border-radius:14px;
+       padding:20px; text-align:left; width:100%; display:block;
+       transition:border-color .12s, box-shadow .12s}
+.pcard:hover{border-color:var(--blue); box-shadow:0 2px 10px rgba(11,101,216,.12)}
+.pcard h3{font-size:16px; margin-bottom:4px}
+.pcard .pnote{font-size:12.5px; color:var(--ink3); min-height:32px}
+.pcard .pstat{display:flex; gap:14px; margin-top:14px; padding-top:12px;
+              border-top:1px solid var(--line)}
+.pcard .pstat div{font-size:12px; color:var(--ink3)}
+.pcard .pstat b{display:block; font-size:19px; color:var(--ink);
+                font-weight:700; letter-spacing:-.02em}
+.pcard.add{border-style:dashed; color:var(--ink3); display:flex;
+           align-items:center; justify-content:center; min-height:150px;
+           font-weight:650; font-size:14px}
+.pcard.add:hover{color:var(--blue)}
+.crumb{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink3)}
+.crumb .now{color:var(--ink); font-weight:700; font-size:15px}
+.crumb button{border:none; background:none; color:var(--blue); font-weight:600;
+              font-size:12.5px; padding:2px 4px}
+
 /* ── 가져오기 ── */
 .drop{border:2px dashed var(--line2); border-radius:12px; padding:22px 16px;
       text-align:center; background:#fbfcfd}
@@ -240,9 +264,28 @@ tbody tr.detail{cursor:default}
   </form>
 </div>
 
+<div id="pickWrap" class="hidden">
+  <div class="appbar"><div class="inner">
+    <div class="brand"><span class="dotmark"></span>바이어 관리</div>
+    <div class="spacer"></div>
+    <span class="whoami" id="whoami2"></span>
+    <button class="btn" id="btnOut2">로그아웃</button>
+  </div></div>
+  <div id="pick">
+    <h1 style="font-size:20px">상품을 고르세요</h1>
+    <div class="lead">상품마다 바이어 목록과 거래조건이 따로 관리됩니다.</div>
+    <div class="pgrid" id="pgrid"></div>
+    <div class="msg bad" id="pickMsg"></div>
+  </div>
+</div>
+
 <div id="app" class="hidden">
   <div class="appbar"><div class="inner">
     <div class="brand"><span class="dotmark"></span>바이어 관리</div>
+    <div class="crumb">
+      <span>›</span><span class="now" id="curProd"></span>
+      <button id="btnSwitch">상품 바꾸기</button>
+    </div>
     <div class="spacer"></div>
     <span class="whoami" id="whoami"></span>
     <button class="btn" id="btnSet">거래조건</button>
@@ -344,6 +387,36 @@ tbody tr.detail{cursor:default}
   </div>
 </div>
 
+<!-- 상품 추가 -->
+<div class="backdrop hidden" id="npBack">
+  <div class="modal" style="max-width:480px" role="dialog" aria-modal="true">
+    <header><h2>상품 추가</h2><button class="btn" id="npX">닫기</button></header>
+    <form id="npForm">
+      <div class="body">
+        <div class="f" style="margin-bottom:12px">
+          <label for="np_name">상품 이름 <span class="req">*</span></label>
+          <input class="fld" id="np_name" required placeholder="예: LCK 트레이딩 카드">
+        </div>
+        <div class="f" style="margin-bottom:12px">
+          <label for="np_code">영문 코드 <span class="req">*</span></label>
+          <input class="fld" id="np_code" required pattern="[a-z0-9][a-z0-9_\-]*"
+                 placeholder="예: lck">
+          <div class="hint">소문자·숫자·하이픈만. 주소(<code>#p=lck</code>)와
+            초안 폴더(<code>메일초안/lck/</code>) 이름이 됩니다. 나중에 바꾸기 번거로우니 짧게 정하세요.</div>
+        </div>
+        <div class="f">
+          <label for="np_note">메모</label>
+          <input class="fld" id="np_note" placeholder="한 줄 설명 (선택)">
+        </div>
+        <div class="msg" id="npMsg"></div>
+      </div>
+      <footer><div class="spacer"></div>
+        <button class="btn" type="button" id="npCancel">취소</button>
+        <button class="btn btn-primary" type="submit">만들기</button></footer>
+    </form>
+  </div>
+</div>
+
 <!-- 가져오기 -->
 <div class="backdrop hidden" id="impBack">
   <div class="modal" style="max-width:860px" role="dialog" aria-modal="true">
@@ -352,7 +425,7 @@ tbody tr.detail{cursor:default}
     <div class="body">
       <div class="hint" style="margin:-4px 0 14px">
         아침 발굴 작업이 보내준 <b>신규바이어.json</b> 파일을 고르세요.
-        이미 등록된 곳은 자동으로 걸러냅니다.
+        <b id="impProd"></b> 상품으로 등록되며, 이미 등록된 곳은 자동으로 걸러냅니다.
       </div>
 
       <div class="drop" id="impDrop">
@@ -564,7 +637,7 @@ const mondayOfWeek = () => { const d=new Date(); d.setHours(0,0,0,0);
   d.setDate(d.getDate()-((d.getDay()+6)%7)); const p=n=>String(n).padStart(2,'0');
   return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
 
-let sb=null, rows=[], editingId=null, delArmed=false, hasTier=true;
+let sb=null, rows=[], editingId=null, delArmed=false, hasTier=true, booted=false;
 const QF={tier1:false, mail:false, todo:false, week:false};
 
 /* ============================================================
@@ -588,18 +661,96 @@ $('loginForm').addEventListener('submit', async e=>{
   if(error) $('loginMsg').textContent = error.message.includes('Invalid login')
     ? '이메일 또는 비밀번호가 맞지 않습니다.' : '로그인 실패: '+error.message;
 });
-$('btnOut').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
+['btnOut','btnOut2'].forEach(id=>$(id).addEventListener('click',
+  async ()=>{ await sb.auth.signOut(); location.reload(); }));
 
 /* ============================================================
-   3. 데이터
+   3. 상품 고르기
    ============================================================ */
+let PROD = null, PRODUCTS = [];
+
 async function enterApp(user){
-  $('whoami').textContent = user.email;
-  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-  await load();
+  if(booted) return; booted = true;
+  ['whoami','whoami2'].forEach(id=>$(id).textContent = user.email);
+  $('login').classList.add('hidden');
+  await loadProducts();
+  const code = (location.hash.match(/p=([a-z0-9_-]+)/i)||[])[1];
+  const hit  = code && PRODUCTS.find(p=>p.code===code);
+  if(hit) openProduct(hit); else showPicker();
 }
+
+async function loadProducts(){
+  const {data,error} = await sb.from('products').select('*')
+                               .order('sort',{ascending:true}).order('id',{ascending:true});
+  if(error){
+    $('pickMsg').textContent = error.message.includes('does not exist')
+      ? 'products 테이블이 아직 없습니다. products.sql 을 Supabase에서 먼저 실행하세요.'
+      : '상품 목록을 못 불러왔습니다: '+error.message;
+    PRODUCTS=[]; return;
+  }
+  PRODUCTS = (data||[]).filter(p=>p.active!==false);
+}
+
+async function showPicker(){
+  PROD = null;
+  history.replaceState(null,'',location.pathname+location.search);
+  $('app').classList.add('hidden');
+  $('pickWrap').classList.remove('hidden');
+  $('pgrid').innerHTML = '<div class="muted">불러오는 중...</div>';
+
+  // 상품별 건수는 한 번에 세어옵니다
+  const counts={};
+  const {data} = await sb.from('buyers').select('product_id,email');
+  (data||[]).forEach(r=>{
+    const c = counts[r.product_id] || (counts[r.product_id]={n:0,m:0});
+    c.n++; if(r.email) c.m++;
+  });
+
+  $('pgrid').innerHTML = PRODUCTS.map(p=>{
+    const c = counts[p.id] || {n:0,m:0};
+    return `<button class="pcard" data-prod="${p.id}">
+      <h3>${esc(p.name)}</h3>
+      <div class="pnote">${esc(p.note)||'&nbsp;'}</div>
+      <div class="pstat">
+        <div>바이어<b>${c.n}</b></div>
+        <div>이메일 확보<b>${c.m}</b></div>
+      </div></button>`;
+  }).join('') + `<button class="pcard add" id="btnNewProd">＋ 상품 추가</button>`;
+}
+
+function openProduct(p){
+  PROD = p;
+  history.replaceState(null,'','#p='+p.code);
+  $('curProd').textContent = p.name;
+  $('pickWrap').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  rows=[]; render();
+  load();
+}
+
+$('pgrid').addEventListener('click', e=>{
+  if(e.target.closest('#btnNewProd')){ openNewProd(); return; }
+  const c=e.target.closest('[data-prod]');
+  if(c){ const p=PRODUCTS.find(x=>x.id==c.dataset.prod); if(p) openProduct(p); }
+});
+$('btnSwitch').addEventListener('click', showPicker);
+
+/* 주소창의 #p= 를 직접 고치거나 뒤로가기를 눌렀을 때도 따라갑니다 */
+window.addEventListener('hashchange', ()=>{
+  if(!booted) return;
+  const code=(location.hash.match(/p=([a-z0-9_-]+)/i)||[])[1];
+  const hit = code && PRODUCTS.find(p=>p.code===code);
+  if(hit){ if(!PROD || PROD.id!==hit.id) openProduct(hit); }
+  else if(PROD) showPicker();
+});
+
+/* ============================================================
+   3-B. 데이터
+   ============================================================ */
 async function load(){
-  const {data,error} = await sb.from('buyers').select('*').order('company',{ascending:true});
+  if(!PROD) return;
+  const {data,error} = await sb.from('buyers').select('*')
+        .eq('product_id', PROD.id).order('company',{ascending:true});
   if(error){ $('empty').textContent='불러오기 실패: '+error.message;
              $('empty').classList.remove('hidden'); return; }
   rows = data || [];
@@ -805,7 +956,7 @@ $('btnCsv').addEventListener('click', ()=>{
   list.forEach(r=>lines.push(CSV_COLS.map(c=>cell(pick(r,c[0]))).join(',')));
   const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob), a=document.createElement('a');
-  a.href=url; a.download=`buyers_${today()}.csv`;
+  a.href=url; a.download=`buyers_${PROD?PROD.code:'all'}_${today()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
@@ -853,7 +1004,8 @@ $('buyerForm').addEventListener('submit', async e=>{
     contact_name:val('i_contact'), email:val('i_email'),
     website:val('i_website'), status:$('i_status').value,
     owner:val('i_owner'), last_touch:val('i_last'),
-    interest:val('i_interest'), evidence:val('i_evidence'), notes:val('i_notes')};
+    interest:val('i_interest'), evidence:val('i_evidence'), notes:val('i_notes'),
+    product_id: PROD.id};
   $('formMsg').className='msg info'; $('formMsg').textContent='저장 중...';
   $('btnSave').disabled=true;
   const res = editingId
@@ -863,7 +1015,7 @@ $('buyerForm').addEventListener('submit', async e=>{
   if(res.error){
     $('formMsg').className='msg bad';
     $('formMsg').textContent = res.error.code==='23505'
-      ? '이미 같은 이메일로 등록된 바이어가 있습니다.' : '저장 실패: '+res.error.message;
+      ? '이 상품에 같은 이메일로 등록된 바이어가 이미 있습니다.' : '저장 실패: '+res.error.message;
     return;
   }
   closeForm(); await load();
@@ -932,7 +1084,8 @@ function impParse(raw){
       contact_name:g('contact_name'), email:g('email'), website:g('website'),
       evidence:g('evidence'), interest:g('interest'),
       tier: TIERS.includes(g('tier')) ? g('tier') : null,
-      notes:g('notes'), status:'후보', owner:null, last_touch:null};
+      notes:g('notes'), status:'후보', owner:null, last_touch:null,
+      product_id: PROD.id};
     if(!row.company) return;
     const c=nComp(row.company), m=nMail(row.email), d=nDom(row.website);
     let why = C.has(c) ? '회사명 중복'
@@ -978,6 +1131,7 @@ function impRead(file){
 }
 
 $('btnImp').addEventListener('click', ()=>{
+  $('impProd').textContent = PROD ? PROD.name : '';
   impReset(); $('impFile').value=''; $('impText').value='';
   $('impBack').classList.remove('hidden');
 });
@@ -1005,7 +1159,7 @@ $('impGo').addEventListener('click', async ()=>{
     $('impMsg').textContent=`등록 중... ${i+1} / ${impReady.length}`;
     const {error} = await sb.from('buyers').insert(impReady[i]);
     if(error) bad.push(`${impReady[i].company} — ${
-      error.code==='23505' ? '이미 등록된 이메일' : error.message}`);
+      error.code==='23505' ? '이 상품에 이미 있는 이메일' : error.message}`);
     else ok++;
   }
   await load();
@@ -1217,13 +1371,14 @@ wireCopy('btnCopySpec','specPrev');
 $('btnSet').addEventListener('click', async ()=>{
   $('setMsg').textContent=''; $('setWho').textContent='불러오는 중...';
   $('setBack').classList.remove('hidden');
-  const {data,error} = await sb.from('mail_settings').select('*').eq('id',1).maybeSingle();
+  const {data,error} = await sb.from('mail_settings').select('*')
+                                .eq('product_id', PROD.id).maybeSingle();
   if(error || !data){
     $('setWho').textContent='';
     $('setMsg').className='msg bad';
     $('setMsg').textContent = error
       ? '설정을 못 불러왔습니다: '+error.message
-      : 'mail_settings 테이블이 아직 없습니다. mail_settings.sql 을 먼저 실행하세요.';
+      : '이 상품의 거래조건 행이 없습니다. products.sql 을 다시 실행하면 만들어집니다.';
     return;
   }
   $('s_pk').value=data.pack_msrp_krw;   $('s_pu').value=data.pack_msrp_usd;
@@ -1255,12 +1410,57 @@ $('setForm').addEventListener('submit', async e=>{
   payload.updated_by = $('whoami').textContent || null;
   $('setMsg').className='msg info'; $('setMsg').textContent='저장 중...';
   $('setSave').disabled=true;
-  const {error} = await sb.from('mail_settings').update(payload).eq('id',1);
+  const {error} = await sb.from('mail_settings').update(payload).eq('product_id', PROD.id);
   $('setSave').disabled=false;
   if(error){ $('setMsg').className='msg bad';
              $('setMsg').textContent='저장 실패: '+error.message; return; }
   $('setMsg').className='msg ok';
   $('setMsg').textContent='✓ 저장했습니다. 다음 발송부터 이 값이 들어갑니다.';
+});
+
+/* ============================================================
+   6-C. 상품 추가
+   ============================================================ */
+function openNewProd(){
+  $('np_name').value=''; $('np_code').value=''; $('np_note').value='';
+  $('npMsg').textContent='';
+  $('npBack').classList.remove('hidden'); $('np_name').focus();
+}
+const closeNp=()=>$('npBack').classList.add('hidden');
+$('npX').addEventListener('click',closeNp);
+$('npCancel').addEventListener('click',closeNp);
+$('npBack').addEventListener('click',e=>{ if(e.target===$('npBack')) closeNp(); });
+
+/* 이름을 적으면 코드를 대충 만들어 줍니다 (직접 고쳐도 됩니다) */
+$('np_name').addEventListener('input', ()=>{
+  if($('np_code').dataset.touched) return;
+  $('np_code').value = $('np_name').value.toLowerCase()
+      .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,20);
+});
+$('np_code').addEventListener('input', e=>{ e.target.dataset.touched='1'; });
+
+$('npForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const name=$('np_name').value.trim(), code=$('np_code').value.trim().toLowerCase();
+  const note=$('np_note').value.trim() || null;
+  const m=$('npMsg');
+  if(!/^[a-z0-9][a-z0-9_-]*$/.test(code)){
+    m.className='msg bad'; m.textContent='영문 코드는 소문자·숫자·하이픈만 쓸 수 있습니다.'; return;
+  }
+  m.className='msg info'; m.textContent='만드는 중...';
+  const {data,error} = await sb.from('products')
+        .insert({code, name, note}).select().single();
+  if(error){
+    m.className='msg bad';
+    m.textContent = error.code==='23505'
+      ? `'${code}' 는 이미 쓰고 있는 코드입니다. 다른 걸 고르세요.`
+      : '만들지 못했습니다: '+error.message;
+    return;
+  }
+  closeNp();
+  await loadProducts();
+  const created = PRODUCTS.find(p=>p.id===data.id) || data;
+  openProduct(created);
 });
 
 /* ============================================================
@@ -1285,7 +1485,8 @@ $('pwForm').addEventListener('submit', async e=>{
   $('pw1').value=''; $('pw2').value='';
 });
 
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); closeImp(); } });
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); closeImp(); closeNp(); } });
 
 /* ============================================================
    8. 시작
