@@ -181,6 +181,8 @@ tbody tr.detail{cursor:default}
          font-size:12.5px; color:var(--ink2); word-break:break-word}
 .moqline b{display:block; font-size:11px; color:var(--ink3); margin-bottom:4px;
            font-weight:700}
+.moqline pre{margin:0; font-family:ui-monospace,Consolas,"Courier New",monospace;
+             font-size:12px; line-height:1.5; white-space:pre-wrap; color:var(--ink)}
 .warnbox{margin-top:12px; padding:10px 12px; border-radius:8px;
          background:#fdf3e3; border:1px solid #f0dcb8; font-size:12.5px;
          color:#7c4a03}
@@ -419,6 +421,17 @@ tbody tr.detail{cursor:default}
 
           <div class="f span3"><label for="s_pt">결제조건</label>
             <input class="fld" id="s_pt" placeholder="예: T/T in advance"></div>
+
+          <div class="f span3"><label for="s_cu">카탈로그 링크</label>
+            <input class="fld" id="s_cu" type="url"
+                   placeholder="https://drive.google.com/file/d/..../view">
+            <div class="hint">
+              회신 메일에 첨부파일 대신 넣을 주소입니다.
+              구글 드라이브라면 공유 권한을 <b>“링크가 있는 모든 사용자 · 뷰어”</b>로 두고,
+              시크릿 창에서 열리는지 꼭 확인하세요.
+              <a href="#" id="s_cuOpen" target="_blank" rel="noopener">열어보기</a>
+            </div>
+          </div>
         </div>
 
         <div class="calc">
@@ -427,6 +440,11 @@ tbody tr.detail{cursor:default}
           <div class="moqline">
             <b>콜드메일에 들어가는 MOQ 문장</b>
             <span id="moqPrev"></span>
+          </div>
+          <div class="moqline">
+            <b>카탈로그 회신에 붙여넣을 문단 <button type="button" class="linkbtn"
+               id="btnCopyTerms" style="float:right">복사</button></b>
+            <pre id="termsPrev"></pre>
           </div>
           <div class="warnbox hidden" id="setWarn"></div>
         </div>
@@ -999,10 +1017,35 @@ function derive(s){
     INCOTERMS:     s.incoterms     || '',
     LEAD_TIME:     s.lead_time     || '',
     PAYMENT_TERMS: s.payment_terms || '',
+    CATALOGUE_URL: s.catalogue_url || '',
     MOQ_LINE: `Our minimum order is ${s.moq_cartons} cartons `
             + `(${usd0(mBox)} boxes / ${usd0(mPack)} packs), `
             + `in units of ${s.order_unit_cartons} cartons.`,
+    TRADE_TERMS: tradeTerms(s, {boxU, cartU, trade, mBox, mPack}),
   };
+}
+/* 카탈로그 회신에 그대로 붙여넣는 거래조건 블록.
+   ※ send_cold_mail.py 의 trade_terms() 와 글자 하나까지 같아야 합니다. */
+function tradeTerms(s, d){
+  const L = (k,v) => '  ' + k.padEnd(22) + v;
+  const out = [
+    L(`Pack`,                          `MSRP  KRW ${krw(s.pack_msrp_krw)}  /  USD ${usd(s.pack_msrp_usd)}`),
+    L(`Box (${s.packs_per_box} packs)`,   `MSRP  KRW ${krw(s.pack_msrp_krw*s.packs_per_box)}  /  USD ${usd(d.boxU)}`),
+    L(`Carton (${s.boxes_per_carton} boxes)`, `MSRP  KRW ${krw(s.pack_msrp_krw*s.packs_per_box*s.boxes_per_carton)}  /  USD ${usd(d.cartU)}`),
+    '',
+    L('Distributor price', `${s.dist_pct}% of MSRP (your margin ${100-s.dist_pct}%)`),
+    L('Carton (trade)',    `USD ${usd(d.trade)}`),
+    L('MOQ',               `${s.moq_cartons} cartons (${usd0(d.mBox)} boxes / ${usd0(d.mPack)} packs)`),
+    L('Order unit',        `${s.order_unit_cartons} cartons`),
+    L('Your cost at MOQ',  `USD ${usd0(d.trade*s.moq_cartons)}  (retail value USD ${usd0(d.cartU*s.moq_cartons)} at MSRP)`),
+  ];
+  if(s.incoterms)     out.push(L('Incoterms',  s.incoterms));
+  if(s.lead_time)     out.push(L('Lead time',  s.lead_time));
+  if(s.payment_terms) out.push(L('Payment',    s.payment_terms));
+  if(s.catalogue_url){
+    out.push('', `Catalogue: ${s.catalogue_url}`);
+  }
+  return out.join('\n');
 }
 function readSet(){
   return {
@@ -1011,14 +1054,14 @@ function readSet(){
     dist_pct:num('s_dp'), moq_cartons:num('s_mq'),
     order_unit_cartons:num('s_ou'),
     incoterms:txt('s_ic')||null, lead_time:txt('s_lt')||null,
-    payment_terms:txt('s_pt')||null,
+    payment_terms:txt('s_pt')||null, catalogue_url:txt('s_cu')||null,
   };
 }
 function renderCalc(){
   const s=readSet();
   if(Object.values(s).some(v=>typeof v==='number' && !(v>0))){
     $('calcTbl').innerHTML='<tr><td colspan="2">숫자를 모두 채워주세요.</td></tr>';
-    $('moqPrev').textContent=''; return;
+    $('moqPrev').textContent=''; $('termsPrev').textContent=''; return;
   }
   const d=derive(s);
   const rows=[
@@ -1033,17 +1076,44 @@ function renderCalc(){
   ];
   $('calcTbl').innerHTML = rows.map(r=>
     `<tr class="${r[2]?'sep':''}"><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
-  $('moqPrev').textContent = d.MOQ_LINE;
+  $('moqPrev').textContent   = d.MOQ_LINE;
+  $('termsPrev').textContent = d.TRADE_TERMS;
+
+  const link=$('s_cuOpen');
+  link.href = s.catalogue_url || '#';
+  link.style.display = s.catalogue_url ? '' : 'none';
 
   const miss=[];
   if(!s.lead_time)     miss.push('리드타임');
   if(!s.payment_terms) miss.push('결제조건');
+  if(!s.catalogue_url) miss.push('카탈로그 링크');
+  const bad=[];
+  if(s.catalogue_url && !/^https?:\/\//i.test(s.catalogue_url))
+    bad.push('카탈로그 링크는 https:// 로 시작해야 합니다.');
+  if(/\b(bit\.ly|tinyurl|goo\.gl|t\.co|is\.gd|han\.gl)\b/i.test(s.catalogue_url||''))
+    bad.push('단축 URL은 스팸으로 걸리기 쉽습니다. 원래 주소를 그대로 쓰세요.');
+
   const w=$('setWarn');
-  w.classList.toggle('hidden', miss.length===0);
-  if(miss.length) w.textContent =
-    `${miss.join(' · ')}이(가) 비어 있습니다. 콜드메일에는 안 들어가지만, `
-    + `카탈로그 회신에는 필요합니다. 비워두면 그 자리가 빈칸으로 나갑니다.`;
+  w.classList.toggle('hidden', miss.length===0 && bad.length===0);
+  w.innerHTML = [
+    bad.length ? '⚠ ' + bad.join(' ') : '',
+    miss.length ? `${miss.join(' · ')}이(가) 비어 있습니다. 콜드메일에는 안 쓰이지만 `
+                + `카탈로그 회신에 필요합니다. 빈 항목은 위 문단에서 아예 빠집니다.` : '',
+  ].filter(Boolean).join('<br>');
 }
+
+$('btnCopyTerms').addEventListener('click', async ()=>{
+  const t=$('termsPrev').textContent;
+  if(!t) return;
+  try{ await navigator.clipboard.writeText(t);
+       $('btnCopyTerms').textContent='복사됨 ✓';
+  }catch(err){
+    const r=document.createRange(); r.selectNode($('termsPrev'));
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    $('btnCopyTerms').textContent='직접 복사하세요';
+  }
+  setTimeout(()=>$('btnCopyTerms').textContent='복사', 1800);
+});
 
 $('btnSet').addEventListener('click', async ()=>{
   $('setMsg').textContent=''; $('setWho').textContent='불러오는 중...';
@@ -1062,7 +1132,7 @@ $('btnSet').addEventListener('click', async ()=>{
   $('s_dp').value=data.dist_pct;        $('s_mq').value=data.moq_cartons;
   $('s_ou').value=data.order_unit_cartons;
   $('s_ic').value=data.incoterms||'';   $('s_lt').value=data.lead_time||'';
-  $('s_pt').value=data.payment_terms||'';
+  $('s_pt').value=data.payment_terms||''; $('s_cu').value=data.catalogue_url||'';
   $('setWho').textContent = data.updated_by
     ? `마지막 수정: ${data.updated_by} · ${String(data.updated_at).slice(0,10)}` : '';
   renderCalc();
