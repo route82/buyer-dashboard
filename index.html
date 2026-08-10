@@ -434,6 +434,36 @@ tbody tr.detail{cursor:default}
           </div>
         </div>
 
+        <details id="specBox" style="margin-top:16px">
+          <summary style="cursor:pointer; font-size:13px; font-weight:650; color:var(--ink2)">
+            물류 정보 — 카톤 규격 · 팔레트 <span class="muted">(선택 입력, 비워둬도 됩니다)</span>
+          </summary>
+          <div class="hint" style="margin:8px 0 12px">
+            아는 것만 넣으세요. 채운 항목만 메일에 나가고, 빈 항목은 줄째로 빠집니다.
+            부피(CBM)와 MOQ 총중량은 자동으로 계산됩니다.
+          </div>
+          <div class="setgrid">
+            <div class="f"><label for="s_cw">카톤 가로 (cm)</label>
+              <input class="fld" id="s_cw" type="number" min="0" step="0.1"></div>
+            <div class="f"><label for="s_cd">카톤 세로 (cm)</label>
+              <input class="fld" id="s_cd" type="number" min="0" step="0.1"></div>
+            <div class="f"><label for="s_ch">카톤 높이 (cm)</label>
+              <input class="fld" id="s_ch" type="number" min="0" step="0.1"></div>
+
+            <div class="f"><label for="s_cg">카톤 총중량 G.W. (kg)</label>
+              <input class="fld" id="s_cg" type="number" min="0" step="0.01"></div>
+            <div class="f"><label for="s_cn">카톤 순중량 N.W. (kg)</label>
+              <input class="fld" id="s_cn" type="number" min="0" step="0.01"></div>
+            <div class="f"><label for="s_cp">팔레트당 카톤 수</label>
+              <input class="fld" id="s_cp" type="number" min="1" step="1"></div>
+
+            <div class="f span2"><label for="s_pty">팔레트 규격</label>
+              <input class="fld" id="s_pty" placeholder="예: 1100 x 1100 mm (KR standard)"></div>
+            <div class="f"><label for="s_ph">적재 후 높이 (cm)</label>
+              <input class="fld" id="s_ph" type="number" min="0" step="0.1"></div>
+          </div>
+        </details>
+
         <div class="calc">
           <h3>자동 계산 — 아래 값은 직접 못 고칩니다</h3>
           <table id="calcTbl"></table>
@@ -445,6 +475,11 @@ tbody tr.detail{cursor:default}
             <b>카탈로그 회신에 붙여넣을 문단 <button type="button" class="linkbtn"
                id="btnCopyTerms" style="float:right">복사</button></b>
             <pre id="termsPrev"></pre>
+          </div>
+          <div class="moqline">
+            <b>물류 정보 문단 <button type="button" class="linkbtn"
+               id="btnCopySpec" style="float:right">복사</button></b>
+            <pre id="specPrev"></pre>
           </div>
           <div class="warnbox hidden" id="setWarn"></div>
         </div>
@@ -989,6 +1024,12 @@ const usd0 = n => Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
 const krw  = n => Number(n).toLocaleString('ko-KR');
 const num  = id => Number($(id).value);
 const txt  = id => $(id).value.trim();
+/* 선택 입력 숫자 — 비어 있거나 0이면 null */
+const opt  = id => { const v=$(id).value.trim();
+                     if(v==='') return null;
+                     const n=Number(v); return (isFinite(n) && n>0) ? n : null; };
+/* 1,234.5 처럼 — 불필요한 0은 떼고 천 단위만 넣습니다 */
+const nm   = (n,dp=2) => Number(n).toLocaleString('en-US',{maximumFractionDigits:dp});
 
 function derive(s){
   const boxU  = s.pack_msrp_usd * s.packs_per_box;
@@ -1022,7 +1063,53 @@ function derive(s){
             + `(${usd0(mBox)} boxes / ${usd0(mPack)} packs), `
             + `in units of ${s.order_unit_cartons} cartons.`,
     TRADE_TERMS: tradeTerms(s, {boxU, cartU, trade, mBox, mPack}),
+    ...specVals(s),
   };
+}
+/* 물류 정보 — 전부 선택 입력. 채운 것만 값이 생기고 나머지는 빈 문자열입니다.
+   ※ send_cold_mail.py 의 spec_vals() 와 같아야 합니다. */
+function specVals(s){
+  const q = s.moq_cartons;
+  const w=s.carton_w_cm, d=s.carton_d_cm, h=s.carton_h_cm;
+  const cbm = (w&&d&&h) ? (w*d*h)/1e6 : null;
+  const cpp = s.cartons_per_pallet;
+  const v = {
+    CARTON_SIZE:  (w&&d&&h) ? `${nm(w,1)} x ${nm(d,1)} x ${nm(h,1)} cm` : '',
+    CARTON_CBM:   cbm ? `${nm(cbm,3)} CBM` : '',
+    CARTON_GW:    s.carton_gw_kg ? `${nm(s.carton_gw_kg)} kg` : '',
+    CARTON_NW:    s.carton_nw_kg ? `${nm(s.carton_nw_kg)} kg` : '',
+    CARTONS_PER_PALLET: cpp ? String(cpp) : '',
+    PALLET_TYPE:  s.pallet_type || '',
+    PALLET_HEIGHT: s.pallet_h_cm ? `${nm(s.pallet_h_cm,1)} cm` : '',
+    MOQ_TOTAL_CBM: cbm ? `${nm(cbm*q,3)} CBM` : '',
+    MOQ_TOTAL_GW:  s.carton_gw_kg ? `${nm(s.carton_gw_kg*q)} kg` : '',
+    MOQ_PALLETS:   cpp ? String(Math.ceil(q/cpp)) : '',
+  };
+  v.SPEC_TERMS = specTerms(s, v);
+  return v;
+}
+function specTerms(s, v){
+  const L = (k,x) => '  ' + k.padEnd(22) + x;
+  const out = [];
+  if(v.CARTON_SIZE)
+    out.push(L('Carton size', v.CARTON_SIZE + (v.CARTON_CBM ? `  (${v.CARTON_CBM})` : '')));
+  if(v.CARTON_GW || v.CARTON_NW){
+    const parts = [];
+    if(v.CARTON_GW) parts.push(`G.W. ${v.CARTON_GW}`);
+    if(v.CARTON_NW) parts.push(`N.W. ${v.CARTON_NW}`);
+    out.push(L('Carton weight', parts.join(' / ')));
+  }
+  if(v.CARTONS_PER_PALLET) out.push(L('Cartons per pallet', v.CARTONS_PER_PALLET));
+  if(v.PALLET_TYPE || v.PALLET_HEIGHT){
+    const parts = [];
+    if(v.PALLET_TYPE)   parts.push(v.PALLET_TYPE);
+    if(v.PALLET_HEIGHT) parts.push(`${v.PALLET_HEIGHT} loaded height`);
+    out.push(L('Pallet', parts.join(', ')));
+  }
+  const tot = [v.MOQ_TOTAL_CBM, v.MOQ_TOTAL_GW,
+               v.MOQ_PALLETS ? `${v.MOQ_PALLETS} pallet(s)` : ''].filter(Boolean);
+  if(tot.length) out.push(L(`At MOQ (${s.moq_cartons} cartons)`, tot.join(' / ')));
+  return out.join('\n');
 }
 /* 카탈로그 회신에 그대로 붙여넣는 거래조건 블록.
    ※ send_cold_mail.py 의 trade_terms() 와 글자 하나까지 같아야 합니다. */
@@ -1055,6 +1142,10 @@ function readSet(){
     order_unit_cartons:num('s_ou'),
     incoterms:txt('s_ic')||null, lead_time:txt('s_lt')||null,
     payment_terms:txt('s_pt')||null, catalogue_url:txt('s_cu')||null,
+    carton_w_cm:opt('s_cw'), carton_d_cm:opt('s_cd'), carton_h_cm:opt('s_ch'),
+    carton_gw_kg:opt('s_cg'), carton_nw_kg:opt('s_cn'),
+    cartons_per_pallet:opt('s_cp'), pallet_type:txt('s_pty')||null,
+    pallet_h_cm:opt('s_ph'),
   };
 }
 function renderCalc(){
@@ -1078,6 +1169,9 @@ function renderCalc(){
     `<tr class="${r[2]?'sep':''}"><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
   $('moqPrev').textContent   = d.MOQ_LINE;
   $('termsPrev').textContent = d.TRADE_TERMS;
+  $('specPrev').textContent  = d.SPEC_TERMS
+    || '아직 입력된 물류 정보가 없습니다. 이 문단은 메일에 나가지 않습니다.';
+  $('btnCopySpec').style.display = d.SPEC_TERMS ? '' : 'none';
 
   const link=$('s_cuOpen');
   link.href = s.catalogue_url || '#';
@@ -1102,18 +1196,21 @@ function renderCalc(){
   ].filter(Boolean).join('<br>');
 }
 
-$('btnCopyTerms').addEventListener('click', async ()=>{
-  const t=$('termsPrev').textContent;
-  if(!t) return;
-  try{ await navigator.clipboard.writeText(t);
-       $('btnCopyTerms').textContent='복사됨 ✓';
-  }catch(err){
-    const r=document.createRange(); r.selectNode($('termsPrev'));
-    getSelection().removeAllRanges(); getSelection().addRange(r);
-    $('btnCopyTerms').textContent='직접 복사하세요';
-  }
-  setTimeout(()=>$('btnCopyTerms').textContent='복사', 1800);
-});
+function wireCopy(btnId, preId){
+  $(btnId).addEventListener('click', async ()=>{
+    const t=$(preId).textContent;
+    if(!t) return;
+    try{ await navigator.clipboard.writeText(t); $(btnId).textContent='복사됨 ✓'; }
+    catch(err){
+      const r=document.createRange(); r.selectNode($(preId));
+      getSelection().removeAllRanges(); getSelection().addRange(r);
+      $(btnId).textContent='직접 복사하세요';
+    }
+    setTimeout(()=>$(btnId).textContent='복사', 1800);
+  });
+}
+wireCopy('btnCopyTerms','termsPrev');
+wireCopy('btnCopySpec','specPrev');
 
 $('btnSet').addEventListener('click', async ()=>{
   $('setMsg').textContent=''; $('setWho').textContent='불러오는 중...';
@@ -1133,6 +1230,12 @@ $('btnSet').addEventListener('click', async ()=>{
   $('s_ou').value=data.order_unit_cartons;
   $('s_ic').value=data.incoterms||'';   $('s_lt').value=data.lead_time||'';
   $('s_pt').value=data.payment_terms||''; $('s_cu').value=data.catalogue_url||'';
+  const put=(id,v)=>$(id).value = (v===null||v===undefined) ? '' : v;
+  put('s_cw',data.carton_w_cm);  put('s_cd',data.carton_d_cm);
+  put('s_ch',data.carton_h_cm);  put('s_cg',data.carton_gw_kg);
+  put('s_cn',data.carton_nw_kg); put('s_cp',data.cartons_per_pallet);
+  put('s_pty',data.pallet_type); put('s_ph',data.pallet_h_cm);
+  $('specBox').open = !!(data.carton_w_cm || data.carton_gw_kg || data.cartons_per_pallet);
   $('setWho').textContent = data.updated_by
     ? `마지막 수정: ${data.updated_by} · ${String(data.updated_at).slice(0,10)}` : '';
   renderCalc();
