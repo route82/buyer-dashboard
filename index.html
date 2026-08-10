@@ -849,7 +849,13 @@ function impParse(raw){
   try{ data = JSON.parse(raw); }
   catch(err){
     $('impMsg').className='msg bad';
-    $('impMsg').textContent='JSON 형식이 아닙니다: '+err.message; return;
+    const head = raw.trim().slice(0,200);
+    $('impMsg').textContent =
+      /^#|^\|/.test(head) || /^---/.test(head)
+        ? '이 파일은 읽기용 문서(.md)입니다. 가져오기는 신규바이어.json 파일만 받습니다.'
+        : '이 파일은 JSON 형식이 아닙니다. 아침 작업이 보내준 신규바이어.json 을 고르세요. '
+          + '(' + err.message.slice(0,80) + ')';
+    return;
   }
   const items = Array.isArray(data) ? data : data.buyers;
   if(!Array.isArray(items)){
