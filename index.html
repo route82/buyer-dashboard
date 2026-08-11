@@ -146,6 +146,28 @@ tbody tr.detail{cursor:default}
 .req{color:var(--st-hold)}
 .hint{font-size:11.5px; color:var(--ink3); margin-top:4px}
 
+/* ── 메일 초안 ── */
+.mailgrid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+.mailgrid textarea{min-height:330px; font-family:ui-monospace,Consolas,"Courier New",monospace;
+                   font-size:12.5px; line-height:1.6}
+.prevbox{background:#f7f9fc; border:1px solid var(--line); border-radius:10px;
+         padding:12px 14px; overflow:auto; max-height:390px}
+.prevbox .ph{font-size:11px; color:var(--ink3); font-weight:700; margin-bottom:6px}
+.prevbox pre{margin:0; white-space:pre-wrap; word-break:break-word;
+             font-family:ui-monospace,Consolas,"Courier New",monospace;
+             font-size:12.5px; line-height:1.6; color:var(--ink)}
+.prevbox .subj{font-weight:700; padding-bottom:8px; margin-bottom:8px;
+               border-bottom:1px solid var(--line); font-size:13px}
+.chips{display:flex; gap:5px; flex-wrap:wrap; margin-top:8px}
+.chips button{border:1px solid var(--line2); background:#fff; border-radius:7px;
+              padding:3px 8px; font-size:11.5px; color:var(--ink2);
+              font-family:ui-monospace,Consolas,monospace}
+.chips button:hover{border-color:var(--blue); color:var(--blue)}
+.logrow{border-bottom:1px solid #f0f2f5; padding:10px 2px; font-size:13px}
+.logrow:last-child{border-bottom:none}
+.logrow .when{font-size:11.5px; color:var(--ink3)}
+.logrow .bad{color:var(--st-hold)}
+
 /* ── 상품 고르기 ── */
 #pick{max-width:1000px; margin:0 auto; padding:40px 16px 72px}
 #pick .lead{color:var(--ink2); margin:6px 0 26px}
@@ -291,6 +313,7 @@ tbody tr.detail{cursor:default}
     <button class="btn" id="btnSet">거래조건</button>
     <button class="btn" id="btnPw">비밀번호</button>
     <button class="btn" id="btnOut">로그아웃</button>
+    <button class="btn" id="btnLog">발송 기록</button>
     <button class="btn" id="btnImp">⤒ 가져오기</button>
     <button class="btn btn-primary" id="btnNew">+ 바이어 추가</button>
   </div></div>
@@ -302,6 +325,7 @@ tbody tr.detail{cursor:default}
       <button class="chip" data-qf="tier1">Tier 1만</button>
       <button class="chip" data-qf="mail">이메일 있는 곳</button>
       <button class="chip" data-qf="todo">아직 안 보낸 곳</button>
+      <button class="chip" data-qf="followup" title="메일 보낸 지 7일 지났는데 회신이 없는 곳">팔로업 대상</button>
       <button class="chip" data-qf="week">이번 주 회신</button>
     </div>
 
@@ -328,7 +352,7 @@ tbody tr.detail{cursor:default}
         <table>
           <thead><tr>
             <th>티어</th><th>회사명</th><th>국가</th><th>담당자</th>
-            <th>이메일</th><th>상태</th><th>최근 연락</th><th style="width:118px"></th>
+            <th>이메일</th><th>상태</th><th>최근 연락</th><th style="width:158px"></th>
           </tr></thead>
           <tbody id="rows"></tbody>
         </table>
@@ -384,6 +408,62 @@ tbody tr.detail{cursor:default}
         <button class="btn btn-primary" type="submit" id="btnSave">저장</button>
       </footer>
     </form>
+  </div>
+</div>
+
+<!-- 메일 초안 -->
+<div class="backdrop hidden" id="mailBack">
+  <div class="modal" style="max-width:1080px" role="dialog" aria-modal="true">
+    <header><h2 id="mailTitle">콜드메일 초안</h2>
+      <button class="btn" id="mailX" aria-label="닫기">닫기</button></header>
+    <div class="body">
+      <div class="hint" style="margin:-4px 0 12px" id="mailWho"></div>
+      <div class="mailgrid">
+        <div>
+          <div class="f" style="margin-bottom:10px">
+            <label for="m_subject">제목</label>
+            <input class="fld" id="m_subject">
+            <div class="hint">제목에 <b>KeSPA, LCK, Faker (LoL), Trading Card</b> 가 들어가야 합니다.</div>
+          </div>
+          <div class="f">
+            <label for="m_body">본문</label>
+            <textarea class="fld" id="m_body"></textarea>
+          </div>
+          <div class="chips" id="phChips"></div>
+          <div class="hint" style="margin-top:8px">
+            위 조각을 누르면 커서 자리에 들어갑니다. 값은 <b>거래조건</b>에서 가져옵니다.
+          </div>
+        </div>
+        <div>
+          <div class="prevbox">
+            <div class="ph">실제로 나가는 모습</div>
+            <div class="subj" id="m_pvSubj"></div>
+            <pre id="m_pvBody"></pre>
+          </div>
+          <div class="warnbox hidden" id="m_warn" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="msg" id="mailMsg"></div>
+    </div>
+    <footer>
+      <button class="btn" type="button" id="m_fromTmpl">첫 메일 문안</button>
+      <button class="btn" type="button" id="m_fromFollow">팔로업 문안</button>
+      <button class="btn" type="button" id="m_log">발송 기록</button>
+      <div class="spacer"></div>
+      <button class="btn" type="button" id="m_gmail">Gmail 작성창 열기</button>
+      <button class="btn btn-primary" type="button" id="m_save">초안 저장</button>
+    </footer>
+  </div>
+</div>
+
+<!-- 발송 기록 -->
+<div class="backdrop hidden" id="logBack">
+  <div class="modal" style="max-width:720px" role="dialog" aria-modal="true">
+    <header><h2 id="logTitle">발송 기록</h2>
+      <button class="btn" id="logX">닫기</button></header>
+    <div class="body"><div id="logList"></div></div>
+    <footer><div class="spacer"></div>
+      <button class="btn" type="button" id="logClose">닫기</button></footer>
   </div>
 </div>
 
@@ -638,7 +718,11 @@ const mondayOfWeek = () => { const d=new Date(); d.setHours(0,0,0,0);
   return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
 
 let sb=null, rows=[], editingId=null, delArmed=false, hasTier=true, booted=false;
-const QF={tier1:false, mail:false, todo:false, week:false};
+const QF={tier1:false, mail:false, todo:false, week:false, followup:false};
+/* 팔로업 기준일 — 오늘로부터 N일 전 */
+const daysAgo = n => { const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-n);
+  const p=x=>String(x).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); };
 
 /* ============================================================
    2. 로그인
@@ -797,6 +881,13 @@ function filtered(){
     if(QF.mail  && !r.email) return false;
     if(QF.todo  && !['후보','검토완료'].includes(r.status)) return false;
     if(QF.week  && !(r.status==='회신옴' && r.last_touch && r.last_touch>=mon)) return false;
+    if(QF.followup){
+      // 부재중 자동응답에서 복귀일을 잡아뒀으면 그 날짜를 먼저 봅니다
+      const due = r.followup_after
+            ? r.followup_after <= today()
+            : (r.last_touch && r.last_touch <= daysAgo(7));
+      if(!due || r.do_not_contact || r.status!=='메일발송') return false;
+    }
     if(t && tierOf(r)!==t) return false;
     if(c && r.country!==c) return false;
     if(s && r.status !==s) return false;
@@ -866,6 +957,7 @@ function render(){
     <td class="small nowrap" data-l="최근 연락">${esc(r.last_touch)||'—'}</td>
     <td class="nowrap" data-l="">
       <div class="rowbtns">
+        <button class="linkbtn" data-mail="${r.id}"${r.email?'':' disabled title="이메일이 없어 보낼 수 없습니다"'}>메일</button>
         <button class="linkbtn" data-open="${r.id}">상세 ▸</button>
         <button class="linkbtn" data-edit="${r.id}">수정</button>
       </div>
@@ -874,6 +966,14 @@ function render(){
   <tr class="detail hidden" data-d="${r.id}">
     <td colspan="8" data-l="">
       <dl>
+        <div><dt>팔로업 예정일</dt><dd>${
+          r.followup_after
+            ? esc(r.followup_after) + (r.followup_after<=today() ? ' — <b>오늘 보낼 때</b>' : '')
+            : '—'}</dd></div>
+        <div><dt>콜드메일 초안</dt><dd>${
+          (r.mail_body && String(r.mail_body).trim())
+            ? '작성됨' + (r.mail_updated_at ? ' · '+String(r.mail_updated_at).slice(0,10) : '')
+            : '<span style="color:var(--st-hold)">아직 없음</span>'}</dd></div>
         <div><dt>분류</dt><dd>${catsOf(r).map(n=>`<span class="tag">${esc(n)}</span>`).join('')||'—'}</dd></div>
         <div><dt>업체유형 (원문)</dt><dd>${esc(r.type)||'—'}</dd></div>
         <div><dt>관심사 / 취급 상품</dt><dd>${esc(r.interest)||'—'}</dd></div>
@@ -899,6 +999,8 @@ function toggleDetail(id){
 
 $('rows').addEventListener('click', e=>{
   // 수정 버튼
+  const ml=e.target.closest('[data-mail]');
+  if(ml){ if(!ml.disabled) openMail(rows.find(r=>r.id==ml.dataset.mail)); return; }
   const ed=e.target.closest('[data-edit]');
   if(ed){ openForm(rows.find(r=>r.id==ed.dataset.edit)); return; }
   // 상세 버튼
@@ -1419,6 +1521,165 @@ $('setForm').addEventListener('submit', async e=>{
 });
 
 /* ============================================================
+   6-D. 콜드메일 초안 · 발송 기록
+   ============================================================ */
+let mailRow=null, mailVals=null;
+let TMPL={subject:'',body:''}, FOLLOW={subject:'',body:''};
+
+const PH_LIST = ['MOQ_LINE','TRADE_TERMS','SPEC_TERMS','CATALOGUE_URL',
+                 'CARTON_TRADE_USD','MOA_USD','MOQ_CARTONS','INCOTERMS',
+                 'LEAD_TIME','PAYMENT_TERMS'];
+
+async function openMail(r){
+  if(!r) return;
+  mailRow=r;
+  $('mailTitle').textContent = `콜드메일 초안 — ${r.company}`;
+  $('mailWho').innerHTML = `받는 사람 <b>${esc(r.email)}</b>`
+    + (r.contact_name?` · 담당자 ${esc(r.contact_name)}`:'')
+    + ` · ${esc(r.country)||'국가 미상'} · ${esc(r.tier||'미분류')}`;
+  $('mailMsg').textContent='';
+  $('m_subject').value = r.mail_subject || '';
+  $('m_body').value    = r.mail_body || '';
+  $('phChips').innerHTML = PH_LIST.map(k=>`<button type="button" data-ph="${k}">{{${k}}}</button>`).join('');
+  $('mailBack').classList.remove('hidden');
+
+  // 거래조건과 기본 문안을 함께 읽어옵니다
+  const {data} = await sb.from('mail_settings').select('*').eq('product_id',PROD.id).maybeSingle();
+  mailVals = data ? derive(data) : null;
+  TMPL   = {subject:data?.template_subject||'', body:data?.template_body||''};
+  FOLLOW = {subject:data?.followup_subject||'', body:data?.followup_body||''};
+  mailPreview();
+}
+const closeMail=()=>$('mailBack').classList.add('hidden');
+$('mailX').addEventListener('click',closeMail);
+$('mailBack').addEventListener('click',e=>{ if(e.target===$('mailBack')) closeMail(); });
+
+function mailFill(text){
+  if(!mailVals) return {out:text, miss:[]};
+  const miss=[];
+  const out = String(text||'').replace(/\{\{\s*([A-Z_]+)\s*\}\}/g,(m,k)=>{
+    if(!(k in mailVals)){ miss.push(k); return m; }
+    if(mailVals[k]===''){ if(!OPTIONAL_PH.has(k)) miss.push(k+'(값 비어 있음)'); return ''; }
+    return mailVals[k];
+  });
+  return {out, miss};
+}
+const OPTIONAL_PH = new Set(['SPEC_TERMS','CARTON_SIZE','CARTON_CBM','CARTON_GW','CARTON_NW',
+  'CARTONS_PER_PALLET','PALLET_TYPE','PALLET_HEIGHT','MOQ_TOTAL_CBM','MOQ_TOTAL_GW','MOQ_PALLETS']);
+
+function mailPreview(){
+  const s=mailFill($('m_subject').value), b=mailFill($('m_body').value);
+  $('m_pvSubj').textContent = s.out || '(제목 없음)';
+  $('m_pvBody').textContent = b.out || '(본문 없음)';
+  const warn=[];
+  const miss=[...new Set([...s.miss,...b.miss])];
+  if(miss.length) warn.push('채우지 못한 항목: '+miss.join(', ')+' — 거래조건에서 값을 넣으세요.');
+  const need=['KeSPA','LCK','Faker','Trading Card'].filter(w=>!s.out.includes(w));
+  if(need.length) warn.push('제목에 '+need.join(', ')+' 이(가) 빠졌습니다.');
+  if(!$('m_body').value.trim()) warn.push('본문이 비어 있습니다.');
+  if(/\[.*?\]/.test(b.out)) warn.push('본문에 아직 [대괄호] 자리가 남아 있습니다.');
+  $('m_warn').classList.toggle('hidden', warn.length===0);
+  $('m_warn').innerHTML = warn.map(esc).join('<br>');
+  return {subject:s.out, body:b.out, ok:warn.length===0};
+}
+['m_subject','m_body'].forEach(id=>$(id).addEventListener('input', mailPreview));
+
+$('phChips').addEventListener('click', e=>{
+  const b=e.target.closest('[data-ph]'); if(!b) return;
+  const t=$('m_body'), tag=`{{${b.dataset.ph}}}`;
+  const a=t.selectionStart??t.value.length, z=t.selectionEnd??a;
+  t.value = t.value.slice(0,a) + tag + t.value.slice(z);
+  t.focus(); t.selectionStart=t.selectionEnd=a+tag.length;
+  mailPreview();
+});
+
+function loadTemplate(t, label, sqlfile){
+  if(!t.body && !t.subject){
+    $('mailMsg').className='msg bad';
+    $('mailMsg').textContent=`이 상품의 ${label}이 아직 없습니다. ${sqlfile} 을 실행했는지 확인하세요.`;
+    return;
+  }
+  if($('m_body').value.trim() && !confirm(`지금 쓴 내용을 ${label}으로 덮어씁니다. 계속할까요?`)) return;
+  $('m_subject').value = t.subject; $('m_body').value = t.body;
+  mailPreview();
+}
+$('m_fromTmpl').addEventListener('click',   ()=>loadTemplate(TMPL,   '첫 메일 문안', 'mail_drafts.sql'));
+$('m_fromFollow').addEventListener('click', ()=>loadTemplate(FOLLOW, '팔로업 문안', 'followup.sql'));
+
+$('m_save').addEventListener('click', async ()=>{
+  const m=$('mailMsg');
+  m.className='msg info'; m.textContent='저장 중...'; $('m_save').disabled=true;
+  const {error} = await sb.from('buyers').update({
+      mail_subject: $('m_subject').value.trim() || null,
+      mail_body:    $('m_body').value.trim() || null,
+      mail_updated_at: new Date().toISOString()}).eq('id', mailRow.id);
+  $('m_save').disabled=false;
+  if(error){ m.className='msg bad'; m.textContent='저장 실패: '+error.message; return; }
+  m.className='msg ok'; m.textContent='✓ 저장했습니다.';
+  const r=rows.find(x=>x.id===mailRow.id);
+  if(r){ r.mail_subject=$('m_subject').value.trim()||null;
+         r.mail_body=$('m_body').value.trim()||null; }
+  render();
+});
+
+/* 서버 발송이 준비되기 전까지 쓰는 임시 수단.
+   완성본을 Gmail 작성창에 넣어 띄웁니다 — 보내기는 사람이 누릅니다. */
+$('m_gmail').addEventListener('click', async ()=>{
+  const p=mailPreview();
+  if(!p.subject || !p.body){
+    $('mailMsg').className='msg bad';
+    $('mailMsg').textContent='제목과 본문을 먼저 채우세요.'; return;
+  }
+  const url='https://mail.google.com/mail/?view=cm&fs=1'
+    + '&to='+encodeURIComponent(mailRow.email)
+    + '&su='+encodeURIComponent(p.subject)
+    + '&body='+encodeURIComponent(p.body);
+  window.open(url,'_blank','noopener');
+  if(!confirm('Gmail 창에서 실제로 보내셨나요?\n\n예를 누르면 상태를 메일발송으로 바꾸고 기록에 남깁니다.')) return;
+  await logSend(mailRow, p.subject, p.body, 'gmail');
+});
+
+async function logSend(r, subject, body, channel){
+  const m=$('mailMsg');
+  const {error:e1} = await sb.from('mail_log').insert({
+    product_id:PROD.id, buyer_id:r.id, company:r.company, to_email:r.email,
+    subject, body, channel, ok:true, sent_by:$('whoami').textContent||null});
+  const {error:e2} = await sb.from('buyers')
+        .update({status:'메일발송', last_touch:today()}).eq('id', r.id);
+  if(e1||e2){ m.className='msg bad';
+              m.textContent='기록 실패: '+((e1||e2).message); return; }
+  m.className='msg ok'; m.textContent='✓ 발송으로 기록하고 상태를 메일발송으로 바꿨습니다.';
+  await load();
+}
+
+/* 발송 기록 */
+const closeLog=()=>$('logBack').classList.add('hidden');
+$('logX').addEventListener('click',closeLog);
+$('logClose').addEventListener('click',closeLog);
+$('logBack').addEventListener('click',e=>{ if(e.target===$('logBack')) closeLog(); });
+
+async function showLog(buyer){
+  $('logTitle').textContent = buyer ? `발송 기록 — ${buyer.company}` : '발송 기록';
+  $('logList').innerHTML='<div class="muted">불러오는 중...</div>';
+  $('logBack').classList.remove('hidden');
+  let q = sb.from('mail_log').select('*').eq('product_id',PROD.id)
+            .order('sent_at',{ascending:false}).limit(200);
+  if(buyer) q = q.eq('buyer_id', buyer.id);
+  const {data,error} = await q;
+  if(error){ $('logList').innerHTML='<div class="msg bad">'+esc(error.message)+'</div>'; return; }
+  if(!data || !data.length){ $('logList').innerHTML='<div class="empty">기록이 없습니다.</div>'; return; }
+  $('logList').innerHTML = data.map(l=>`<div class="logrow">
+      <div class="when">${esc(String(l.sent_at).replace('T',' ').slice(0,16))}
+        · ${esc(l.channel||'')}${l.ok?'':' · <span class="bad">실패</span>'}</div>
+      <div><b>${esc(l.company)}</b> → ${esc(l.to_email)}</div>
+      <div class="muted">${esc(l.subject)}</div>
+      ${l.error?`<div class="bad">${esc(l.error)}</div>`:''}
+    </div>`).join('');
+}
+$('m_log').addEventListener('click', ()=>showLog(mailRow));
+$('btnLog').addEventListener('click', ()=>showLog(null));
+
+/* ============================================================
    6-C. 상품 추가
    ============================================================ */
 function openNewProd(){
@@ -1486,7 +1747,8 @@ $('pwForm').addEventListener('submit', async e=>{
 });
 
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); closeImp(); closeNp(); } });
+  if(e.key==='Escape'){ closeForm(); closePw(); closeSet(); closeImp(); closeNp();
+                        closeMail(); closeLog(); } });
 
 /* ============================================================
    8. 시작
