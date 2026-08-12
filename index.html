@@ -693,7 +693,9 @@ const tierOf = r => r.tier || NOTIER;
 /* 업체유형(type) 글자를 보고 자동으로 분류합니다.
    한 회사가 여러 분류에 걸릴 수 있습니다 (예: "TCG·완구 종합 도매유통").
    분류 기준을 바꾸고 싶으면 아래 단어 목록만 고치면 됩니다. */
-const CATS = [
+/* 상품마다 분류 기준이 다릅니다. products.categories 에서 읽어옵니다.
+   비어 있으면 아래 기본값(트레이딩 카드용)을 씁니다. */
+const DEFAULT_CATS = [
   ['TCG·카드 전문',  /TCG|트레이딩\s?카드|카드샵|스포츠카드|카드/i],
   ['도매·유통',      /도매|유통|총판|수입|B2B|딜러망|드롭십/i],
   ['리테일·매장',    /리테일|소매|매장|체인|마켓플레이스|판매|샵|스토어/i],
@@ -705,7 +707,19 @@ const CATS = [
   ['제조·퍼블리셔',  /제조|퍼블리셔|퍼블리싱|발행사|로컬라이저|출판/i],
   ['접촉 대상 아님', /협회|경쟁|벤치마크|플랫폼/i],
 ];
+let CATS = DEFAULT_CATS;
 const NOCAT = '기타';
+function setCats(p){
+  const raw = p && p.categories;
+  if(!Array.isArray(raw) || !raw.length){ CATS = DEFAULT_CATS; return; }
+  const out = [];
+  raw.forEach(c=>{
+    if(!c || !c.n || !c.p) return;
+    try{ out.push([String(c.n), new RegExp(c.p, 'i')]); }
+    catch(err){ console.warn('분류 정규식이 잘못됐습니다:', c.n, err.message); }
+  });
+  CATS = out.length ? out : DEFAULT_CATS;
+}
 const catsOf = r => { const t=r.type||''; return CATS.filter(c=>c[1].test(t)).map(c=>c[0]); };
 
 const $ = id => document.getElementById(id);
@@ -804,6 +818,7 @@ async function showPicker(){
 
 function openProduct(p){
   PROD = p;
+  setCats(p);
   history.replaceState(null,'','#p='+p.code);
   $('curProd').textContent = p.name;
   $('pickWrap').classList.add('hidden');
